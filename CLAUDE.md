@@ -81,12 +81,6 @@ Full library: `context/signal-library.md`
 
 ---
 
-## Stack
-
-No CRM, no Clay, no outbound automation. Lead lists, enrichment, scoring, and signal detection all run inside this repo via the skills in `skills/`. Outreach is manual LinkedIn DMs from Samy.
-
----
-
 ## Team
 
 | Name | Role | Owns |
@@ -109,14 +103,44 @@ No CRM, no Clay, no outbound automation. Lead lists, enrichment, scoring, and si
 ## Quick Commands
 
 ```
-# Research an account
+# Research an account (company)
 Read skills/account-research/SKILL.md and research [founder-company.com]
 
-# Score a list
+# Research a person (founder, stakeholder)
+Read skills/people-research/SKILL.md and research [LinkedIn URL or "Name, Company"]
+
+# Score a list against ICP
 Read skills/icp-scoring/SKILL.md and score these accounts: [paste list]
+
+# Enrich approved leads (LinkedIn scrape + email/phone + company signals)
+Read skills/lead-enrichment/SKILL.md and enrich outputs/[date]-[campaign]-scored.csv
 
 # Build a campaign
 Read skills/signal-to-sequence/SKILL.md — build a Tier 1 campaign for
 experienced EU/US B2B founders posting inconsistently on LinkedIn,
 leading with the proximity/speed/quality angle vs. big-creator agencies
 ```
+
+---
+
+## Workflow
+
+```
+1. ICP definition / segmentation     →  context/icp-definition.md
+2. Find leads matching ICP           →  skills/people-research, skills/account-research
+3. Score the leads                   →  skills/icp-scoring
+4. Enrich approved leads             →  skills/lead-enrichment
+5. Write DM / email sequences        →  skills/signal-to-sequence (per-lead, coming)
+6. Export CSV                         →  (coming)
+7. Push to Notion (optional)          →  (coming)
+```
+
+## Stack
+
+- **EXA** — company + people discovery (`web_search_advanced_exa`). Falls back to built-in web search if MCP not connected.
+- **RapidAPI** (`linkedin-api8`) — LinkedIn profile scrape in lead-enrichment.
+- **Orthogonal** (`@orth/cli` + `orthogonal/lead-enrichment` skill) — email and phone enrichment.
+- **Crustdata** — person enrichment, company resolution by domain, and job-posting signals for lead refinement (annotation only).
+- **Notion** (MCP, optional) — final list push.
+
+All credentials live in `.env` (see `.env.example`). Every enrichment field in the output carries a `*_source` pointer so downstream consumers can audit provenance.

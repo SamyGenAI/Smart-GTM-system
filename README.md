@@ -36,9 +36,13 @@ gtm-starter-kit/
 │
 ├── skills/                             ← Claude executes these. One-line prompts.
 │   ├── setup/SKILL.md                 ← Run first. Provide domain → repo auto-populated.
-│   ├── account-research/SKILL.md      ← Deep research on any account before outreach
-│   ├── signal-to-sequence/SKILL.md    ← Turn a signal into LinkedIn DM outreach
-│   └── icp-scoring/SKILL.md          ← Score accounts against your ICP, assign tiers
+│   ├── account-research/SKILL.md      ← Deep company research (EXA primary, WebSearch fallback)
+│   ├── people-research/SKILL.md       ← Deep person research (EXA primary, WebSearch fallback)
+│   ├── icp-scoring/SKILL.md           ← Score accounts against your ICP, assign tiers
+│   ├── lead-enrichment/SKILL.md       ← Enrich approved leads: LinkedIn + email/phone + signals
+│   └── signal-to-sequence/SKILL.md    ← Turn a signal into LinkedIn DM outreach
+│
+├── .env.example                        ← Copy to .env and fill in provider keys
 │
 └── outputs/                            ← All skill outputs land here
     ├── scoring/                        ← ICP scoring outputs
@@ -81,8 +85,14 @@ Your context is already there. Claude knows your ICP, your signals, your persona
 
 **Other skills to run next:**
 ```
+# Research a person (founder, stakeholder)
+Read skills/people-research/SKILL.md and research [LinkedIn URL]
+
 # Score a list against your ICP
 Read skills/icp-scoring/SKILL.md and score these companies: [paste list]
+
+# Enrich approved leads
+Read skills/lead-enrichment/SKILL.md and enrich outputs/[date]-scored.csv
 
 # Build a campaign from a signal
 Read skills/signal-to-sequence/SKILL.md.
@@ -90,6 +100,43 @@ Build a Tier 2 campaign for accounts triggering [signal name]. Target [persona].
 ```
 
 All outputs land in `outputs/` — see the naming convention below.
+
+---
+
+## Workflow
+
+End-to-end, one skill per step:
+
+```
+1. ICP definition                    →  context/icp-definition.md   (manual, editable)
+2. Find leads matching ICP           →  skills/people-research  +  skills/account-research
+3. Score the leads                   →  skills/icp-scoring
+4. Enrich approved leads             →  skills/lead-enrichment
+5. Write DM / email sequences        →  skills/signal-to-sequence (per-lead, coming)
+6. Export CSV                         →  (coming)
+7. Push to Notion (optional)          →  (coming)
+```
+
+### Data providers
+
+| Provider | Used by | What it does | Credential |
+|---|---|---|---|
+| **EXA** (MCP) | people-research, account-research | Company + people discovery with `web_search_advanced_exa`. Falls back to built-in web search if MCP not connected. | MCP connection |
+| **RapidAPI** (`linkedin-api8`) | lead-enrichment | LinkedIn profile scrape — headline, positions, followers, posts | `RAPIDAPI_KEY` |
+| **Orthogonal** (`@orth/cli`) | lead-enrichment | Email and phone discovery via the `orthogonal/lead-enrichment` sub-skill | `ORTHOGONAL_API_KEY` + `orth` CLI installed |
+| **Crustdata** | lead-enrichment | Person enrichment (`/person/enrich`), company resolution by domain (`/company/search`), job-posting signals (`/job/search`) | `CRUSTDATA_API_KEY` |
+| **Notion** (MCP, optional) | CSV-to-Notion push (coming) | Final table destination | MCP connection |
+
+Each skill uses a **Step 0 detection pattern**: check which providers are configured, pick the path up front, stamp the choice in the output. Missing providers degrade gracefully — the skill never hard-fails on a missing credential, it just leaves those fields null and notes the skip.
+
+### Credential setup
+
+```bash
+cp .env.example .env
+# fill in RAPIDAPI_KEY, CRUSTDATA_API_KEY, ORTHOGONAL_API_KEY as you acquire them
+```
+
+`.env` is gitignored. Missing keys are fine — `lead-enrichment` runs on whichever subset you've configured.
 
 ---
 

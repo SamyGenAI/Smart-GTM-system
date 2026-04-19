@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EnrichedLead",
+  "description": "Canonical output of skills/lead-enrichment. Every field carries a _source pointer so downstream (CSV, Notion, sequence-writer) can audit provenance.",
+  "type": "object",
+  "required": ["lead_id", "name", "linkedin_url", "sources"],
+  "properties": {
+    "lead_id": { "type": "string", "description": "Stable id assigned by the scoring step" },
+    "name": { "type": "string" },
+    "first_name": { "type": ["string", "null"] },
+    "last_name": { "type": ["string", "null"] },
+    "headline": { "type": ["string", "null"] },
+    "current_title": { "type": ["string", "null"] },
+    "current_company": { "type": ["string", "null"] },
+    "current_company_id": { "type": ["integer", "null"], "description": "Crustdata crustdata_company_id when resolved — needed for job-signal queries" },
+    "current_company_domain": { "type": ["string", "null"], "description": "Primary domain used to resolve current_company_id via Crustdata /company/search" },
+    "company": {
+      "type": ["object", "null"],
+      "description": "Current company enrichment from Crustdata /company/search",
+      "properties": {
+        "headcount": { "type": ["integer", "null"] },
+        "hq_country": { "type": ["string", "null"] },
+        "year_founded": { "type": ["string", "null"] },
+        "total_funding_usd": { "type": ["number", "null"] }
+      }
+    },
+    "location": { "type": ["string", "null"] },
+    "country_code": { "type": ["string", "null"] },
+    "linkedin_url": { "type": "string" },
+    "linkedin_username": { "type": ["string", "null"] },
+    "linkedin": {
+      "type": ["object", "null"],
+      "properties": {
+        "followers": { "type": ["integer", "null"] },
+        "connections": { "type": ["integer", "null"] },
+        "is_creator": { "type": ["boolean", "null"] },
+        "is_top_voice": { "type": ["boolean", "null"] },
+        "recent_posts_count": { "type": ["integer", "null"] },
+        "summary": { "type": ["string", "null"] }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "email": { "type": ["string", "null"] },
+        "email_source": { "type": ["string", "null"], "enum": ["orthogonal", "crustdata", null] },
+        "phone": { "type": ["string", "null"] },
+        "phone_source": { "type": ["string", "null"], "enum": ["orthogonal", "crustdata", null] },
+        "websites": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "signals": {
+      "type": "object",
+      "description": "Annotations only — never used to drop a lead. Scoring already happened.",
+      "properties": {
+        "posts_last_90d": { "type": ["integer", "null"] },
+        "posts_last_30d": { "type": ["integer", "null"] },
+        "avg_reactions": { "type": ["number", "null"] },
+        "tier1_inconsistent_poster": { "type": ["boolean", "null"], "description": "Igentiv Tier 1 signal #1 — 3–15 posts in 90d, gaps 10d+, <100 avg reactions, 500+ followers" },
+        "recent_company_jobs_count": { "type": ["integer", "null"] },
+        "recent_company_jobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "category": { "type": ["string", "null"] },
+              "url": { "type": ["string", "null"] },
+              "date_added": { "type": ["string", "null"] },
+              "country": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "hiring_content_or_growth_role": { "type": ["boolean", "null"], "description": "Tier 2 signal — hiring Content/Marketing/Growth/Founder's Associate" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Which providers were called and whether each returned useful data. Sources that were not configured appear as 'skipped'.",
+      "properties": {
+        "rapidapi": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
+        "orthogonal": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
+        "crustdata_person": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
+        "crustdata_company": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
+        "crustdata_jobs": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] }
+      },
+      "required": ["rapidapi", "orthogonal", "crustdata_person", "crustdata_company", "crustdata_jobs"]
+    },
+    "notes": { "type": "array", "items": { "type": "string" }, "description": "Human-readable enrichment notes — missing creds, partial matches, rate limits" }
+  }
+}
