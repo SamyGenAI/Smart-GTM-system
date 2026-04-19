@@ -29,7 +29,7 @@ Last updated: 2026-04-19
 
 **Detection method:**
 ```
-LinkedIn scrape (Taplio / Favikon / Clay + Phantombuster):
+LinkedIn:
   For each founder in Tier 1/2 target list:
     - Pull last 90 days of posts
     - Calculate: post count, avg days between posts, avg reactions

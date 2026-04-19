@@ -109,13 +109,22 @@ Read skills/account-research/SKILL.md and research [founder-company.com]
 # Research a person (founder, stakeholder)
 Read skills/people-research/SKILL.md and research [LinkedIn URL or "Name, Company"]
 
+# Source leads from engagers on your own LinkedIn posts
+Read skills/post-engagers/SKILL.md and pull engagers from my last [N] posts
+
 # Score a list against ICP
 Read skills/icp-scoring/SKILL.md and score these accounts: [paste list]
 
 # Enrich approved leads (LinkedIn scrape + email/phone + company signals)
 Read skills/lead-enrichment/SKILL.md and enrich outputs/[date]-[campaign]-scored.csv
 
-# Build a campaign
+# Write per-lead sequences on the enriched list
+Read skills/lead-sequence/SKILL.md and write sequences for outputs/[date]-[campaign]-enriched.json
+
+# Export the final list (CSV always, Notion optional)
+Read skills/export-list/SKILL.md and export outputs/[date]-[campaign]-sequenced.json
+
+# Build a campaign (many-accounts, shared trigger — different use case from lead-sequence)
 Read skills/signal-to-sequence/SKILL.md — build a Tier 1 campaign for
 experienced EU/US B2B founders posting inconsistently on LinkedIn,
 leading with the proximity/speed/quality angle vs. big-creator agencies
@@ -128,11 +137,11 @@ leading with the proximity/speed/quality angle vs. big-creator agencies
 ```
 1. ICP definition / segmentation     →  context/icp-definition.md
 2. Find leads matching ICP           →  skills/people-research, skills/account-research
+   Or source from own audience       →  skills/post-engagers (optional)
 3. Score the leads                   →  skills/icp-scoring
 4. Enrich approved leads             →  skills/lead-enrichment
-5. Write DM / email sequences        →  skills/signal-to-sequence (per-lead, coming)
-6. Export CSV                         →  (coming)
-7. Push to Notion (optional)          →  (coming)
+5. Write per-lead DM / email sequences → skills/lead-sequence
+6. Export list (CSV always, Notion optional) → skills/export-list
 ```
 
 ## Stack

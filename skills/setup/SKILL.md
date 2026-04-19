@@ -41,6 +41,30 @@ Claude writes the repo first. No questions upfront. After you see the result, it
 
 ---
 
+## Step 0: Capture the User's LinkedIn URL
+
+Before researching the company, ask one question:
+
+> "Paste your LinkedIn profile URL (e.g. `https://www.linkedin.com/in/yourname/`). It unlocks skills that source leads from your own audience — engagers on your posts, your network, etc. Skip with 'no linkedin' if you'd rather not."
+
+Store the answer for Step 2 — it goes into `context/profile.md` under a new `user_linkedin_url` field. If the user provides one and `RAPIDAPI_KEY` is set in `.env`, also fetch the profile once to harvest useful onboarding signals:
+
+```bash
+skills/lead-enrichment/scripts/rapidapi-linkedin.sh "<user_linkedin_url>"
+```
+
+Extract for later use:
+- `data.firstName` + `data.lastName` → confirm/override the founder name inferred from the website
+- `data.headline` → the user's own positioning language (useful for `positioning.md`)
+- `data.position[0].title` + `data.position[0].companyName` → confirms the user's role
+- `data.summary` → often the clearest first-person voice sample the skill will ever see (useful for `profile.md` "What we do" and for voice calibration in later skills)
+- `follower` → note as a GTM capability (followers are a distribution asset)
+- `posts` sample → pattern of what they post about, input to voice in `profile.md`
+
+If the user skips, continue without it. If `RAPIDAPI_KEY` isn't set, save the URL anyway and note that post-engager signal skills will be available once the key is added.
+
+---
+
 ## Step 1: Research the Company
 
 **If public data is limited** (bootstrapped company, stealth stage, minimal web presence): use what's available and mark more fields as `[inferred]`. A company with no Crunchbase entry → mark funding stage as `[inferred: bootstrapped or undisclosed]`. No G2 presence → skip competitor reviews, infer from their own positioning language. No case studies → infer personas from job postings and team page only. The repo will be less complete but still usable — the refinement pass in Step 5 exists exactly for this situation.
@@ -86,6 +110,19 @@ Write files in this order:
 
 ### 1. `context/profile.md`
 Fill with: company overview from research, product description, deal profile inferred from customer base and pricing page (mark as `[inferred]`), reference customers from public case studies.
+
+Also add a top-level section `## User LinkedIn` with:
+
+```markdown
+## User LinkedIn
+
+**user_linkedin_url:** <URL from Step 0, or "not provided">
+**user_linkedin_headline:** <from RapidAPI fetch, if available>
+**user_linkedin_followers:** <from RapidAPI fetch, if available>
+**voice_sample:** <data.summary from RapidAPI fetch, if available — first-person sample for voice calibration>
+```
+
+This URL is read by `skills/post-engagers/` and any other skill that sources leads from the user's own audience. Never commit someone else's LinkedIn URL here — this is the user's own profile only.
 
 ### 2. `context/icp-definition.md`
 Fill with:

@@ -17,7 +17,7 @@ Enriches each approved lead with LinkedIn profile data, contact info (email/phon
 
 ## Purpose
 
-Step 4 in the Igentiv workflow. Takes leads that passed ICP scoring and fills in every field needed to write a personalized DM sequence and push to a CSV / Notion table. The skill never drops a lead — it annotates. If an enrichment provider fails or isn't configured, the field stays null and the `sources` block records `skipped` or `error`.
+Step 4 in the GTM workflow. Takes leads that passed ICP scoring and fills in every field needed to write a personalized DM sequence and push to a CSV / Notion table. The skill never drops a lead — it annotates. If an enrichment provider fails or isn't configured, the field stays null and the `sources` block records `skipped` or `error`.
 
 ---
 
@@ -29,11 +29,42 @@ Step 4 in the Igentiv workflow. Takes leads that passed ICP scoring and fills in
 
 ---
 
+## Run Mode (ask before any work)
+
+**Step 0a — Ask the user what they're enriching for.**
+
+Before the detection checks, ask once:
+
+> "What are you enriching these leads for?
+>  1. LinkedIn DM campaign (LinkedIn data + signals, no email/phone)
+>  2. Email campaign (email + phone + company context, skip LinkedIn scrape)
+>  3. Phone outreach (phone + basic identity, skip everything else)
+>  4. Multi-channel (LinkedIn + email + phone)
+>  5. Full enrichment (everything — default)"
+
+Capture the answer as `run_mode` ∈ `linkedin | email | phone | multi | full`. Stamp it at the top of the output file and in the run summary.
+
+**If the prompt already specifies a channel** (e.g. "enrich for LinkedIn DM campaign"), skip the question and set `run_mode` directly.
+
+**Mode → provider matrix** — providers not in the row are `skipped (mode)`, not `skipped (no creds)`:
+
+| Mode | RapidAPI | Orthogonal | Crustdata person | Crustdata company | Crustdata jobs |
+|---|---|---|---|---|---|
+| `linkedin` | on | off | off | on | on |
+| `email` | off | on | on | on | off |
+| `phone` | off | on | on | off | off |
+| `multi` | on | on | on | on | on |
+| `full` | on | on | on | on | on |
+
+`multi` and `full` resolve to the same provider set today; keep the distinction so we can add more providers later without breaking callers.
+
+---
+
 ## Data Source Priority
 
-**Step 0 — Detect provider availability (do this once, before processing any lead).**
+**Step 0b — Detect provider availability for the providers the mode requires.**
 
-For each provider, check what's configured. Tell the user what's on and what's off, then proceed with whatever subset is available.
+For each provider the mode calls for, check what's configured. Tell the user what's on and what's off, then proceed with whatever subset is available.
 
 | Provider | Detection | If missing |
 |---|---|---|
@@ -64,7 +95,7 @@ Record the detection result in the run log — do not re-check per lead.
 
 For each lead in the input list, run the providers that are on. Providers are **independent** — run in parallel per lead. Build the `EnrichedLead` object incrementally; each provider fills its slice.
 
-### 1. RapidAPI LinkedIn scrape (if on)
+### 1. RapidAPI LinkedIn scrape (if mode includes it AND provider on)
 
 Parse the LinkedIn username from the URL, then:
 
@@ -85,7 +116,7 @@ Map the response to the `linkedin` block:
 - `posts` (array) → `linkedin.recent_posts_count` = length; compute avg reactions if available in post objects
 - Record `sources.rapidapi = "hit"` (or `"miss"` / `"error"`)
 
-### 2. Orthogonal email/phone (if on)
+### 2. Orthogonal email/phone (if mode includes it AND provider on)
 
 Orthogonal runs as an installed sub-skill, not a raw HTTP call. The `orthogonal/lead-enrichment` skill handles its own provider routing internally.
 
@@ -93,7 +124,7 @@ Invoke it as a peer skill by following the instructions in its `SKILL.md` (insta
 
 Map result → `contact.email` (with `email_source: "orthogonal"`) and `contact.phone` (with `phone_source: "orthogonal"`). Record `sources.orthogonal`.
 
-### 3. Crustdata person enrich (if on)
+### 3. Crustdata person enrich (if mode includes it AND provider on)
 
 ```bash
 scripts/crustdata-person.sh "<linkedin_url>"
@@ -154,7 +185,7 @@ If `linkedin.recent_posts_count`, `linkedin.followers`, and avg reactions are al
   - avg reactions < 100
   - followers ≥ 500
 
-This is the Igentiv unlock signal per `context/signal-library.md`. Annotation only.
+Use whatever the user's `context/signal-library.md` defines as the "inconsistent poster" unlock — thresholds above are a reasonable default but the library is the source of truth. Annotation only.
 
 ---
 
@@ -173,16 +204,16 @@ One JSON file at `outputs/[date]-[campaign]-enriched.json`, containing an array 
 Also emit a run summary at the top of the terminal:
 
 ```
-Enrichment complete — 147 leads
+Enrichment complete — 147 leads   mode: linkedin
   rapidapi:         132 hit, 11 miss, 4 error
-  orthogonal:       98 hit, 41 miss, 8 skipped (no creds)
-  crustdata_person: 121 hit, 20 miss, 6 error
+  orthogonal:       skipped (mode: linkedin)
+  crustdata_person: skipped (mode: linkedin)
   crustdata_company: 118 hit, 23 miss, 6 skipped (no domain)
   crustdata_jobs:   89 hit (avg 4.2 jobs/lead), 29 skipped (no company_id)
-Emails found: 98/147 (67%)
-Phones found: 43/147 (29%)
 Tier 1 inconsistent-poster signal: 91/147 leads (62%)
 ```
+
+The "skipped" suffix distinguishes why: `(mode: X)` = intentional, `(no creds)` = user needs to set a key, `(no domain)` / `(no company_id)` = upstream dependency missing.
 
 ---
 
@@ -190,9 +221,10 @@ Tier 1 inconsistent-poster signal: 91/147 leads (62%)
 
 Before handing off to the sequence-writer skill:
 
+- [ ] `run_mode` was captured (asked or passed in) and stamped in the output + run summary
 - [ ] Every input lead has a corresponding output record (no silent drops)
-- [ ] The `sources` block is filled for every lead — never leave a provider status ambiguous
-- [ ] Leads with `email: null` are flagged in the run summary so Samy can decide whether to DM-only or chase email manually
-- [ ] `tier1_inconsistent_poster` is computed whenever the input data allows it — this is the Igentiv unlock
+- [ ] The `sources` block is filled for every lead with the right status — `skipped_by_mode` vs `skipped_no_creds` vs `skipped_no_dependency` are distinguished, never collapsed into a generic "skipped"
+- [ ] For email/phone/multi/full modes: leads with `email: null` are flagged in the run summary
+- [ ] For linkedin/multi/full modes: `tier1_inconsistent_poster` is computed when the data allows (if the user's `context/signal-library.md` defines such a signal)
 - [ ] The run summary is printed at the top of the terminal, not buried
-- [ ] If all three providers are off, the skill stops with an error rather than producing a file of empty shells
+- [ ] If every provider the mode requires is off (credentials missing), the skill stops with a clear error telling the user which keys to set, rather than producing a file of empty shells

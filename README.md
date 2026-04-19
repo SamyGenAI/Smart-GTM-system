@@ -38,9 +38,12 @@ gtm-starter-kit/
 │   ├── setup/SKILL.md                 ← Run first. Provide domain → repo auto-populated.
 │   ├── account-research/SKILL.md      ← Deep company research (EXA primary, WebSearch fallback)
 │   ├── people-research/SKILL.md       ← Deep person research (EXA primary, WebSearch fallback)
+│   ├── post-engagers/SKILL.md  ← Source leads from reactors on your own LinkedIn posts
 │   ├── icp-scoring/SKILL.md           ← Score accounts against your ICP, assign tiers
 │   ├── lead-enrichment/SKILL.md       ← Enrich approved leads: LinkedIn + email/phone + signals
-│   └── signal-to-sequence/SKILL.md    ← Turn a signal into LinkedIn DM outreach
+│   ├── lead-sequence/SKILL.md         ← Write per-lead DM/email sequences from the enriched list
+│   ├── export-list/SKILL.md           ← Export final list to CSV (always) + Notion (optional)
+│   └── signal-to-sequence/SKILL.md    ← Campaign-scale: one signal across many accounts
 │
 ├── .env.example                        ← Copy to .env and fill in provider keys
 │
@@ -110,11 +113,11 @@ End-to-end, one skill per step:
 ```
 1. ICP definition                    →  context/icp-definition.md   (manual, editable)
 2. Find leads matching ICP           →  skills/people-research  +  skills/account-research
+   Or source from your own audience  →  skills/post-engagers (optional)
 3. Score the leads                   →  skills/icp-scoring
 4. Enrich approved leads             →  skills/lead-enrichment
-5. Write DM / email sequences        →  skills/signal-to-sequence (per-lead, coming)
-6. Export CSV                         →  (coming)
-7. Push to Notion (optional)          →  (coming)
+5. Write per-lead DM / email sequences → skills/lead-sequence
+6. Export list (CSV always, Notion optional) → skills/export-list
 ```
 
 ### Data providers
@@ -125,7 +128,7 @@ End-to-end, one skill per step:
 | **RapidAPI** (`linkedin-api8`) | lead-enrichment | LinkedIn profile scrape — headline, positions, followers, posts | `RAPIDAPI_KEY` |
 | **Orthogonal** (`@orth/cli`) | lead-enrichment | Email and phone discovery via the `orthogonal/lead-enrichment` sub-skill | `ORTHOGONAL_API_KEY` + `orth` CLI installed |
 | **Crustdata** | lead-enrichment | Person enrichment (`/person/enrich`), company resolution by domain (`/company/search`), job-posting signals (`/job/search`) | `CRUSTDATA_API_KEY` |
-| **Notion** (MCP, optional) | CSV-to-Notion push (coming) | Final table destination | MCP connection |
+| **Notion** (MCP, optional) | export-list | Upsert the final list into a master Notion database | MCP connection |
 
 Each skill uses a **Step 0 detection pattern**: check which providers are configured, pick the path up front, stamp the choice in the output. Missing providers degrade gracefully — the skill never hard-fails on a missing credential, it just leaves those fields null and notes the skip.
 

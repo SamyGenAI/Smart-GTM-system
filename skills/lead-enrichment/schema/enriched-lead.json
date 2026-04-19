@@ -3,8 +3,13 @@
   "title": "EnrichedLead",
   "description": "Canonical output of skills/lead-enrichment. Every field carries a _source pointer so downstream (CSV, Notion, sequence-writer) can audit provenance.",
   "type": "object",
-  "required": ["lead_id", "name", "linkedin_url", "sources"],
+  "required": ["lead_id", "name", "linkedin_url", "sources", "run_mode"],
   "properties": {
+    "run_mode": {
+      "type": "string",
+      "enum": ["linkedin", "email", "phone", "multi", "full"],
+      "description": "Channel mode chosen at the start of the run — controls which providers were intentionally skipped"
+    },
     "lead_id": { "type": "string", "description": "Stable id assigned by the scoring step" },
     "name": { "type": "string" },
     "first_name": { "type": ["string", "null"] },
@@ -56,7 +61,7 @@
         "posts_last_90d": { "type": ["integer", "null"] },
         "posts_last_30d": { "type": ["integer", "null"] },
         "avg_reactions": { "type": ["number", "null"] },
-        "tier1_inconsistent_poster": { "type": ["boolean", "null"], "description": "Igentiv Tier 1 signal #1 — 3–15 posts in 90d, gaps 10d+, <100 avg reactions, 500+ followers" },
+        "tier1_inconsistent_poster": { "type": ["boolean", "null"], "description": "True when LinkedIn activity matches the user's 'inconsistent poster' signal defined in context/signal-library.md" },
         "recent_company_jobs_count": { "type": ["integer", "null"] },
         "recent_company_jobs": {
           "type": "array",
@@ -78,11 +83,11 @@
       "type": "object",
       "description": "Which providers were called and whether each returned useful data. Sources that were not configured appear as 'skipped'.",
       "properties": {
-        "rapidapi": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
-        "orthogonal": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
-        "crustdata_person": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
-        "crustdata_company": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] },
-        "crustdata_jobs": { "type": "string", "enum": ["hit", "miss", "error", "skipped"] }
+        "rapidapi": { "type": "string", "enum": ["hit", "miss", "error", "skipped_by_mode", "skipped_no_creds", "skipped_no_dependency"] },
+        "orthogonal": { "type": "string", "enum": ["hit", "miss", "error", "skipped_by_mode", "skipped_no_creds", "skipped_no_dependency"] },
+        "crustdata_person": { "type": "string", "enum": ["hit", "miss", "error", "skipped_by_mode", "skipped_no_creds", "skipped_no_dependency"] },
+        "crustdata_company": { "type": "string", "enum": ["hit", "miss", "error", "skipped_by_mode", "skipped_no_creds", "skipped_no_dependency"] },
+        "crustdata_jobs": { "type": "string", "enum": ["hit", "miss", "error", "skipped_by_mode", "skipped_no_creds", "skipped_no_dependency"] }
       },
       "required": ["rapidapi", "orthogonal", "crustdata_person", "crustdata_company", "crustdata_jobs"]
     },

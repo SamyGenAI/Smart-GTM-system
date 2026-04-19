@@ -17,7 +17,7 @@ That's it. Claude will read your ICP, personas, and positioning context automati
 
 ## Purpose
 
-Build a complete intelligence brief on a single person — a founder, a head of growth, a chief of staff — before any 1:1 outreach. The goal is not a bio you could copy from their LinkedIn headline. The goal is to understand what they post about, what they are struggling with, what they have tried, and what specific angle and channel will make a message from Samy land instead of getting ignored.
+Build a complete intelligence brief on a single person — a founder, a head of growth, a chief of staff, or whoever `context/personas/` defines — before any 1:1 outreach. The goal is not a bio you could copy from their LinkedIn headline. The goal is to understand what they post about, what they are struggling with, what they have tried, and what specific angle and channel will make a message from the user land instead of getting ignored.
 
 ---
 
@@ -118,7 +118,7 @@ Output a Tier (1 / 2 / 3 / Skip) with one-line justification.
 
 ### Step 3: LinkedIn Activity Audit (10 min)
 
-This is the core of the skill. The whole Igentiv thesis depends on *how* this person posts.
+This is the core of the skill for users whose ICP hinges on LinkedIn behavior (per `context/icp-definition.md` and `context/signal-library.md`). If the user's ICP doesn't care about LinkedIn activity, do a lighter-weight version of this step focused on whatever channels and content patterns `context/signal-library.md` actually defines as Tier 1 signals.
 
 For the last 90 days of LinkedIn activity, capture:
 
@@ -131,7 +131,7 @@ For the last 90 days of LinkedIn activity, capture:
 - **Engagement quality:** are the commenters ICP-adjacent (other founders, operators) or junior/random?
 
 **Signal check against `context/signal-library.md`:**
-- Tier 1 signal #1 fires if: 3–15 posts in 90 days, gaps 10+ days, <100 avg reactions, 500+ followers. This is Igentiv's exact unlock.
+- For each Tier 1 / Tier 2 signal defined in the user's signal library, check whether it fires for this person based on the activity data captured above. Use the thresholds and scoring logic from `context/signal-library.md` — this skill does not define thresholds of its own.
 
 Exa query shape (news category for press mentions + interviews):
 ```
@@ -177,17 +177,13 @@ web_search_advanced_exa {
 
 This is the only step that matters. Everything above was research. This step is judgment.
 
-Map the person to the Igentiv positioning (`context/positioning.md`):
+Map the person to the user's positioning (`context/positioning.md`):
 
 1. **Which persona are they?** Founder/CEO, Head of Growth, or Chief of Staff? Different angle per persona.
 
 2. **Why now?** What specific event or pattern makes *this week* the right moment to DM them? (Recent inconsistent post streak, new hire they just made, product launch, funding, conference talk.)
 
-3. **Which competitive angle lands?**
-   - **vs. big-creator agencies:** "Work with the founder, not a junior in their queue."
-   - **vs. ghostwriters:** "Design + leads bundled — text is the floor, not the ceiling."
-   - **vs. design-only:** "We bundle pipeline, not just impressions."
-   - **vs. DIY + AI:** "Human taste on top of AI efficiency."
+3. **Which competitive angle lands?** Read the angles from `context/competitor-radar.md` and `context/positioning.md`. Pick the one whose "win when" conditions match what this person signals (e.g. they value direct access → use the proximity angle; they're burned by generic templates → use the quality angle). Do not invent angles the user hasn't defined.
 
 4. **What's the hook?** The first line of the DM. Reference something specific from Step 3 or 4 — a recent post, a podcast quote, a hiring move — and connect it to a relevant insight. Never generic. Never "loved your post."
 
@@ -237,7 +233,7 @@ Recommended action: [DM this week / Sequence / Monitor / Skip]
 **Competitive angle to use:** [proximity / speed / quality-per-dollar / bundled pipeline]
 **Hook (first DM line):** [proposed opening]
 **Channel:** [LinkedIn DM / Warm intro via X / Email]
-**Sender:** [Samy, always, for founder-to-founder]
+**Sender:** [Who from the user's team sends this — read from context/profile.md]
 
 ## Suggested Next Action
 [Specific: which sequence, which asset to attach — e.g., mockup of their last post redesigned as carousel — which day to send]
@@ -253,5 +249,5 @@ Before filing the output, confirm:
 - [ ] Anti-ICP has been checked — not a creator-without-business, not a competitor agency
 - [ ] LinkedIn activity audit has real numbers, not vibes
 - [ ] The "why now" references a specific post, hire, or event — with a date
-- [ ] The hook would make sense to this person reading it cold — it does not name-drop Igentiv in line one
+- [ ] The hook would make sense to this person reading it cold — it does not name-drop the user's company in line one
 - [ ] The data source chosen at Step 0 (EXA or WebSearch) is noted at the top of the output
