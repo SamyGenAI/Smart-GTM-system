@@ -40,6 +40,41 @@ Build a complete intelligence brief on a target account before any outreach. The
 
 ---
 
+## Data Source Priority
+
+**Step 0 — Detect EXA availability (do this before any search).**
+
+Check whether `web_search_advanced_exa` is present in the available tool list for this session.
+- If **yes** → use EXA path for the whole run.
+- If **no** → use WebSearch path for the whole run. Do not attempt `web_search_advanced_exa` — the call will fail. Optionally tell the user: "EXA MCP is not connected — falling back to web search. Connect EXA for richer company metadata."
+
+Note the chosen path at the top of the output file: `Data source: EXA` or `Data source: WebSearch (EXA not connected)`.
+
+**EXA path** (via `web_search_advanced_exa`)
+- **Only** use `web_search_advanced_exa`. Never `web_search_exa` or other Exa tools.
+- **Never** run Exa searches in the main context. Spawn a Task/Agent subagent per search. The subagent runs the search, processes results, and returns compact JSON or brief markdown.
+- **Tune numResults** to intent: "a few" → 10–20, "comprehensive" → 50–100, specific number → match it.
+- **Generate 2–3 query variations** and run in parallel for coverage, then dedupe.
+- **Category choice:**
+  - `company` → homepage, headcount, location, funding, revenue (use for Step 1 snapshot)
+  - `news` → press coverage, funding announcements, product launches (use for Step 1 + Step 3)
+  - `people` → public LinkedIn profiles (use for Step 2 stakeholder map)
+  - no category (`type: "auto"` or `"deep"`) → tech stack, blogs, competitor mentions, broader context
+- **Category restrictions:**
+  - `category: "company"` → no `includeDomains`/`excludeDomains`, no date filters
+  - `includeText` / `excludeText` → single-item arrays only, across all categories
+  - `category: "news"` and no-category → date filters and domain filters work
+
+**WebSearch path** (via built-in `WebSearch`)
+- Target queries at the specific sources you want: `site:crunchbase.com`, `site:linkedin.com/company`, `site:linkedin.com/in`, `site:builtwith.com`, company blog, changelog URLs.
+- Spawn a subagent per search for token isolation, same as the EXA path.
+
+**Mid-run fallback:** if the chosen path returns 0 useful results for a specific query, switch that single query to the other path and note it inline. Do not silently retry the same tool.
+
+**Auth-gated content** (private LinkedIn sections, paid Crunchbase, paid news) → Claude in Chrome, regardless of path.
+
+---
+
 ## Research Steps
 
 ### Step 1: Company Snapshot (5 min)
@@ -54,6 +89,24 @@ Pull the basics. Don't stop here — this is table stakes.
 
 Sources: LinkedIn, Crunchbase, BuiltWith, their own blog and changelog.
 
+EXA query shapes:
+```
+web_search_advanced_exa {
+  "query": "[Company] headcount funding revenue",
+  "category": "company",
+  "numResults": 10,
+  "type": "auto"
+}
+```
+```
+web_search_advanced_exa {
+  "query": "[Company] funding round announcement",
+  "category": "news",
+  "numResults": 10,
+  "startPublishedDate": "[today minus 18 months]"
+}
+```
+
 ---
 
 ### Step 2: Stakeholder Map (10 min)
@@ -66,6 +119,17 @@ For each stakeholder:
 - Recent activity: LinkedIn posts, conference talks, published content — what are they thinking about?
 - Mutual connections or shared context (alumni, past companies, investors in common)
 - Best channel based on their activity patterns
+
+EXA query shape:
+```
+web_search_advanced_exa {
+  "query": "[Title] [Company] LinkedIn",
+  "category": "people",
+  "numResults": 15
+}
+```
+
+For deeper per-person research, hand off to `skills/people-research/SKILL.md`.
 
 ---
 
@@ -89,6 +153,16 @@ Reference `context/competitor-radar.md`.
 - Is there any evidence they use a competitor? (Job postings, tech stack, content)
 - If yes: which competitive angle applies?
 - Are they evaluating alternatives? (Job postings for vendor evaluation, RFP language on LinkedIn)
+
+EXA query shape (no category — enables date + domain filters):
+```
+web_search_advanced_exa {
+  "query": "[Company] [competitor name]",
+  "numResults": 15,
+  "type": "auto",
+  "startPublishedDate": "[today minus 12 months]"
+}
+```
 
 ---
 
@@ -164,3 +238,4 @@ Before filing the output, confirm:
 - [ ] Signal score is calculated and recorded
 - [ ] The hook would make sense to someone who doesn't know our product
 - [ ] Competitive context has been checked
+- [ ] The data source chosen at Step 0 (EXA or WebSearch) is noted at the top of the output
