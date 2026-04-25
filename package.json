@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "find-leads": "node scripts/find_leads_exa.mjs"
+  },
+  "dependencies": {
+    "exa-js": "^2.12.1"
+  }
+}
