@@ -50,4 +50,4 @@ Read skills/export-leads/SKILL.md and export outputs/[date]-[campaign]-leads.csv
 
 - Build first 150 Tier 1 LinkedIn leads
 - Score and prioritize with Haiku
-- Send personalized founder-to-founder DMs
+- Send personalized DMs
