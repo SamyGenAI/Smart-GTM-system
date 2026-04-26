@@ -57,7 +57,7 @@ Vary the type-of-company and the process across leads. Don't reuse the exact sam
 - Never cite a LinkedIn post or article in the DM text. Treat all post/article content as background research only.
 - Never use the em dash character (`—`). Use a period or comma.
 - No buzzwords. No pleasantries beyond a simple "thanks for connecting". Don't pitch, ask a question.
-- The follow-up keeps the research frame but takes a different angle. Never "just following up" / "bumping this".
+- DM2 opens directly with a new angle and never references the previous DM. Banned phrases (even softened): "follow-up", "follow up", "following up", "Quick follow-up", "Just following up", "circling back", "bumping this", "to add to my last message", "one more thing". DM2 should give the prospect something worth their time: a sharp observation, a tension worth their take, or a related angle that opens a new thread.
 
 ## Quick Start
 

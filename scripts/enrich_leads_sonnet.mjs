@@ -166,7 +166,9 @@ Hard constraints:
 - No pleasantries beyond a simple "thanks for connecting".
 - Do not pitch. Ask a question.
 
-The follow-up DM (dm_sequence_2) keeps the research frame but takes a different angle: a related process, a different stakeholder question, or a contrast worth their take. Never "just following up", "bumping this", "wanted to circle back".
+DM2 takes a different angle from DM1 and gives the prospect something worth their time: a sharp observation about their domain that you want their take on, a contrast or tension you've noticed in their space, or a related angle that opens a new thread. Open directly with the new content, not with a meta line.
+
+DM2 must NEVER contain any of these words or phrases (even softened): "follow-up", "follow up", "following up", "Quick follow-up", "Just following up", "circling back", "bumping this", "to add to my last message", "one more thing". Don't reference the previous DM at all. Just start the new thread.
 
 Output format (strict, exact delimiters, no markdown, no commentary):
 <<<OUTREACH>>>
