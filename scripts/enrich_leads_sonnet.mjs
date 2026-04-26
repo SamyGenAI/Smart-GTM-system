@@ -5,11 +5,11 @@ function parseArgs(argv) {
   const args = {
     input: "",
     outCsv: "",
-    model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5-20251001",
     minScore: 60,
     maxLeads: 0,
     sleepMs: 1500,
-    webSearches: 3,
+    webSearches: 1,
   };
 
   for (let i = 2; i < argv.length; i += 1) {
@@ -117,62 +117,99 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const SYSTEM_PROMPT = `You are an SDR researcher writing ready-to-send LinkedIn DM copy for Igentiv, a premium LinkedIn content + lead gen studio for B2B founders.
+function extractFirstName(title) {
+  if (!title) return "";
+  const beforePipe = String(title).split("|")[0].trim();
+  const firstWord = beforePipe.split(/\s+/)[0] || "";
+  return firstWord.replace(/[^\p{L}\p{M}\-']/gu, "");
+}
 
-For each lead you are given, you produce three artifacts:
-1. outreach_angle — ONE sentence naming the specific concrete trigger signal you found via web search (recent LinkedIn post, fundraise, hiring, launch, podcast, etc).
-2. dm_sequence_1 — first DM, filled with real context (no brackets).
-3. dm_sequence_2 — follow-up DM, filled with real context.
+const MAX_BRIEF_CHARS = 1500;
 
-DM sequence 1 template (opener, question-led):
-"Hey {{first_name}}, [give a compliment, something you noticed, connect genuinely]. I'm researching how [ICP role] like you handle [problem I'm solving]. Does it take [pain point] and how do you ensure [specific result]?"
+function loadContext() {
+  if (!fs.existsSync("context/brief.md")) {
+    throw new Error(
+      "Missing context/brief.md. Create a short brief (offer + ICP + angle bias, ~150 words) before running enrichment.",
+    );
+  }
+  const raw = fs.readFileSync("context/brief.md", "utf8");
+  const trimmed = raw.length > MAX_BRIEF_CHARS ? raw.slice(0, MAX_BRIEF_CHARS) : raw;
+  return { brief: trimmed };
+}
 
-DM sequence 2 template (follow-up, value-add / curiosity):
-"Reply with genuine interest, I'd love to learn more about it to help me refine my offer and positioning. Would you be open for a quick chat (not a sales call, just want to learn)?"
+function buildSystemPrompt({ brief }) {
+  return `You write short, post-connection LinkedIn DMs from one founder to another. Assume the connection request was just accepted.
 
-Strict rules (apply to every DM):
-1. The FIRST sentence must be about THEM. Not your company, not your product, not your excitement about reaching out.
-2. Reference the SPECIFIC trigger signal. If signal is a fundraise, name the round. If a LinkedIn post, reference its core message. If a job posting, name the role. Generic = fail.
-3. No buzzwords. Banned list: synergy, leverage, touch base, circle back, ping, loop in, alignment, move the needle, low-hanging fruit, deep dive, bandwidth, at the end of the day, innovative, cutting-edge, best-in-class, world-class, game-changing, disruptive.
-4. No pleasantries that waste the first line. No "I hope this email finds you well." No "I hope you are having a great week." No "Happy [day of week]."
-5. Ask a question, do not pitch. Questions create engagement; pitches create delete buttons.
-6. The follow-up must add NEW value, a new angle, or genuine interest in their reply. Never "just following up", "bumping this", "wanted to circle back."
-7. READY TO SEND. No placeholder brackets like [Company Name] or [Pain Point]. Fill in everything from the research. The ONLY acceptable variable is the prospect's first name, written exactly as {{first_name}}.
+COMPANY BRIEF (so you know who is sending and who they sell to):
+${brief}
 
-If web search returns no concrete recent signal, output NO_SIGNAL as the outreach_angle and leave both DMs empty.
+How to write the DMs:
 
-Output format (strict, exact delimiters, no other commentary, no markdown):
+- Research the prospect: their posts, bio, website, articles. The research is for YOU. It does not appear in the DM. Never cite or attribute a post.
+- Frame the DM as research, not a pitch. The frame: you are researching how a specific type of company handles a specific process or challenge, and you want to know if the prospect personally handles it. This frame answers the implicit "why is this stranger asking me?" and positions you as someone trying to learn, not sell.
+
+Frame to adapt (do NOT copy verbatim, swap in real specifics from your research):
+"Hey [first_name], thanks for connecting. I'm researching how [type of company they run] handle [specific process from their world]. Is that something you deal with, or someone else on your team?"
+
+The "[type of company]" must be specific (e.g. "B2B SEO agencies", "ABM consultancies for B2B SaaS", "AI-content studios"), not generic ("companies", "founders").
+The "[specific process]" must come from your research: a methodology they use, a metric they track, a transition their industry is in, a tradeoff they wrestle with. Not a fabricated detail.
+
+Length: max 2 short sentences, around 30 words. If a sentence has more than one comma, it is too long.
+Vary the topic and phrasing across leads. Don't mechanically reuse the exact same wording.
+
+Hard constraints:
+- Use the actual first name provided in the lead context. Never output "{{first_name}}", "[first_name]", or any placeholder.
+- Never invent facts. If no real, specific process or angle shows up in research, output NO_SIGNAL and leave both DMs empty.
+- Never cite a LinkedIn post or article in the DM text. Treat all post and article content as background research.
+- No em dash. Use a period or comma.
+- No buzzwords (synergy, leverage, touch base, circle back, alignment, move the needle, deep dive, bandwidth, innovative, cutting-edge, world-class, game-changing, disruptive, etc.).
+- No pleasantries beyond a simple "thanks for connecting".
+- Do not pitch. Ask a question.
+
+The follow-up DM (dm_sequence_2) keeps the research frame but takes a different angle: a related process, a different stakeholder question, or a contrast worth their take. Never "just following up", "bumping this", "wanted to circle back".
+
+Output format (strict, exact delimiters, no markdown, no commentary):
 <<<OUTREACH>>>
 <one sentence outreach angle, or NO_SIGNAL>
 <<<DM1>>>
-<dm_sequence_1 text>
+<the first DM, ready to send>
 <<<DM2>>>
-<dm_sequence_2 text>
+<the follow-up DM, ready to send>
 <<<END>>>`;
-
-function buildUserPrompt(lead) {
-  return `Research this lead via web search and produce the 3 artifacts in the strict output format.
-
-Lead:
-- Title / role: ${lead.title || ""}
-- LinkedIn URL: ${lead.url || ""}
-- Snippet: ${lead.snippet || ""}
-- Highlights: ${lead.highlights || ""}
-- Source query (how they were found): ${lead.query || ""}
-- ICP score: ${lead.score || ""}
-- ICP-fit reason: ${lead.why_match || ""}
-
-Search for recent signals (last 90 days preferred): LinkedIn posts, fundraise, hiring, product launch, podcast/interview, conference talk. Pick ONE concrete signal as the trigger.
-
-Output ONLY the strict format with the four delimiters.`;
 }
 
-async function enrichLead(lead, model, webSearches) {
+function clip(text, max) {
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  return s.length > max ? `${s.slice(0, max)}...` : s;
+}
+
+function buildUserPrompt(lead, firstName) {
+  return `Research this lead via web search and write the DMs.
+
+Lead:
+- First name (use this name in the DMs): ${firstName || "(unknown, leave the greeting generic)"}
+- Title / role: ${clip(lead.title, 300)}
+- LinkedIn URL: ${lead.url || ""}
+- Snippet: ${clip(lead.snippet, 300)}
+- Highlights: ${clip(lead.highlights, 500)}
+- Source query (how they were found): ${clip(lead.query, 120)}
+- ICP score: ${lead.score || ""}
+- ICP-fit reason: ${clip(lead.why_match, 240)}
+
+Find ONE real, specific thing about this person. It can be a recent dated event (raise, hire, launch, talk in the last 60 days), a specific product or methodology they own, an exact phrase from their bio, a stated belief or contrarian take. Anchor the DM on that one thing and ask a question that shows you actually understood it.
+
+If nothing real and specific shows up, output NO_SIGNAL.
+
+Output ONLY the four delimiters.`;
+}
+
+async function enrichLead(lead, systemPrompt, model, webSearches) {
+  const firstName = extractFirstName(lead.title);
   const payload = {
     model,
     max_tokens: 2048,
     temperature: 0.3,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     tools: [
       {
         type: "web_search_20250305",
@@ -181,7 +218,7 @@ async function enrichLead(lead, model, webSearches) {
       },
     ],
     messages: [
-      { role: "user", content: buildUserPrompt(lead) },
+      { role: "user", content: buildUserPrompt(lead, firstName) },
     ],
   };
 
@@ -257,13 +294,15 @@ async function main() {
   const cap = args.maxLeads > 0 ? Math.min(args.maxLeads, eligible.length) : eligible.length;
   const target = eligible.slice(0, cap);
 
+  const systemPrompt = buildSystemPrompt(loadContext());
+
   const enrichmentByUrl = new Map();
   let processed = 0;
   let skipped = 0;
   for (const lead of target) {
     const url = String(lead.url ?? "").trim();
     try {
-      const raw = await enrichLead(lead, args.model, args.webSearches);
+      const raw = await enrichLead(lead, systemPrompt, args.model, args.webSearches);
       const parsed = parseEnrichment(raw);
       enrichmentByUrl.set(url, parsed);
       if (!parsed.outreach_angle) skipped += 1;
