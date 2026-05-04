@@ -1,6 +1,16 @@
-# Company Profile
+# Profile
 
 ---
+
+## User's LinkedIn profile
+
+**Name:**
+**Headline**
+**Follower count:**
+**About section summary:**
+**What the user cares about (inferred from posts and profile):**
+**What the user is selling (inferred from posts and profile):**
+
 
 ## The Company
 

@@ -11,7 +11,7 @@ Read skills/post-engagers/SKILL.md and pull engagers from my last [N] posts.
 
 ## Purpose
 
-Pull people who reacted to your recent LinkedIn posts and turn them into warm leads.
+Pull people who reacted to a LinkedIn post and turn them into warm leads.
 
 ## Dependencies
 

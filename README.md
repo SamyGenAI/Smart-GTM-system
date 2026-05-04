@@ -1,4 +1,4 @@
-# GTM Starter Kit (Dead Simple)
+# GTM Starter Kit
 
 This repo is optimized for one thing: LinkedIn outreach with minimal moving parts.
 

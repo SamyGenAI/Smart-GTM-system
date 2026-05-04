@@ -10,7 +10,7 @@ GTM motion: founder-led LinkedIn outreach
 Primary channel: LinkedIn DM  
 Core offer: premium content + qualified founder conversations
 
-## Dead-Simple Stack
+## Stack
 
 - **EXA**: lead + company discovery
 - **Claude Haiku**: lead scoring and qualification
@@ -20,7 +20,7 @@ Core offer: premium content + qualified founder conversations
 ## Workflow
 
 ```text
-1) Setup profile and LinkedIn URL         -> skills/setup
+1) Setup profile, website URL, and LinkedIn URL         -> skills/setup
 2) Find leads with EXA                    -> skills/find-leads
 3) Score leads with Claude Haiku          -> skills/score-leads
 4) Enrich leads with Sonnet + Web Search  -> skills/enrich-leads
