@@ -23,6 +23,7 @@ skills/post-engagers/scripts/rapidapi-linkedin.sh "<your_linkedin_url>"
    - `context/icp-definition.md`
    - `context/positioning.md`
    - `context/brief.md`
+   - `competitor-radar.md`
    - `CLAUDE.md`
 
 ## Required question 1
@@ -49,7 +50,7 @@ Ask once:
 
 > "Who is your ideal client ? (or reply 'skip')."
 
-## Required question 4
+## Required question 5
 
 Ask once:
 
@@ -62,11 +63,13 @@ Ask once:
 - [ ] If RapidAPI data is available, user's LinkedIn profile details are filled in `context/profile.md` under `User's LinkedIn profile` section
 - [ ] Business details and `<your_website_url>` are saved in `context/profile.md` under `The Company` section.
 - [ ] `context/icp-definition.md` and `context/positioning.md` are filled using details from Linkedin profile, user answers and website content.
-- [ ] `CLAUDE.md` quick commands match the simple workflow
+- [ ] `context/competitor-radar.md` is filled with competitor details from question 5
+- [ ] `CLAUDE.md` is personalized to user and company info.
 
 ## Rules
 
 - Never infer a fact, all data stored must be accurate based on : user answers, Linkedin profile and website content.
+- If an information is missing, don't try to guess it or to invent it
 - Be concise, we must only keep useful data for specialized outreach.
 
 ## Next command
