@@ -31,7 +31,8 @@ description: Run once after cloning the repo to make it fully operational. Guide
 2. If `RAPIDAPI_KEY` exists, fetch LinkedIn profile once with:
 
 ```bash
-node scripts/rapidapi_linkedin_profile.mjs "<your_linkedin_url>"
+node scripts/rapidapi_linkedin_profile.mjs "<your_linkedin_url>" --out outputs/linkedin-profile.json
+node scripts/parse_linkedin_profile.mjs outputs/linkedin-profile.json
 ```
 3. Use websearch to get as much details as possible from `<your_website_url>`
 4. For each context file, read the corresponding template to understand the required structure, then create the adapted file alongside it inside the same folder — never modify the template:
