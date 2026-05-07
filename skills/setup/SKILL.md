@@ -1,3 +1,8 @@
+---
+name: setup
+description: Run once after cloning the repo to make it fully operational. Guides the user through copying .env.example, adding API keys, and populating all context files (profile, ICP, positioning, brief, competitor radar) from their LinkedIn profile, website, and answers. Triggers on /setup or any message like "set up this repo", "onboard", "get started", or "configure this repo for [domain]".
+---
+
 # Skill: Setup
 
 **Run once:** right after clone  
@@ -6,10 +11,21 @@
 ## Quick Start
 
 ```
-Read skills/setup/SKILL.md and set up this repo for [your-domain.com]
+/setup
 ```
 
 ## What setup does
+
+0. Check that `.env` exists. If not, instruct the user:
+
+   > "Before we start, copy `.env.example` to `.env` and fill in your API keys:
+   > - `ANTHROPIC_API_KEY` — required (scoring + enrichment)
+   > - `EXA_API_KEY` — required (find-leads)
+   > - `RAPIDAPI_KEY` — optional (LinkedIn profile pull + post-engagers)
+   >
+   > Once your `.env` is ready, reply 'done' and we'll continue."
+
+   Wait for confirmation before proceeding.
 
 1. Capture your LinkedIn profile URL and business website
 2. If `RAPIDAPI_KEY` exists, fetch LinkedIn profile once with:
@@ -18,7 +34,7 @@ Read skills/setup/SKILL.md and set up this repo for [your-domain.com]
 node scripts/rapidapi_linkedin_profile.mjs "<your_linkedin_url>"
 ```
 3. Use websearch to get as much details as possible from `<your_website_url>`
-4. For each context file, read the corresponding template to understand the required structure, then create the adapted file alongside it — never modify the template:
+4. For each context file, read the corresponding template to understand the required structure, then create the adapted file alongside it inside the same folder — never modify the template:
 
 | Template (read, never touch) | Adapted file (create/overwrite with real data) |
 |------------------------------|------------------------------------------------|

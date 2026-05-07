@@ -1,6 +1,6 @@
 ---
 name: export-leads
-description: Export final enriched leads to a clean CSV ready for Notion or CRM.
+description: Export an enriched lead CSV into a clean, normalized outreach list with standardized columns and auto-derived tiers. Final step before loading into a CRM, Notion, or outreach tool. Triggers on /export-leads or any message like "export leads", "export the CSV", "finalize the outreach list", or "prepare the CRM export".
 ---
 
 # Skill: Export Leads

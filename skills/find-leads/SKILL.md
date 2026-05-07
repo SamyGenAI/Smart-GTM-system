@@ -1,6 +1,6 @@
 ---
 name: find-leads
-description: Find people or companies with EXA using one script.
+description: Search for people or companies matching a query using EXA. Use to build a prospect list, find ICP-matching leads, or discover companies in a target segment. Requires EXA_API_KEY. Triggers on /find-leads or any message like "find leads", "find companies", "build a prospect list", or "search for [type of person/company]".
 ---
 
 # Skill: Find Leads

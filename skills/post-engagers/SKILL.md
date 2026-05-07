@@ -1,3 +1,8 @@
+---
+name: post-engagers
+description: Pull warm leads from LinkedIn post reactions using RapidAPI (linkedin-api8). Extracts people who reacted to one or more posts and outputs a scored-ready CSV in inputs/post-engagers/. Requires RAPIDAPI_KEY. Triggers on /post-engagers or any message like "pull post engagers", "get people who reacted to my posts", "warm leads from LinkedIn", or "extract post reactions".
+---
+
 # Skill: Post Engagers (RapidAPI)
 
 **Duration:** 2-8 minutes  
@@ -15,7 +20,7 @@ Pull people who reacted to a LinkedIn post and turn them into warm leads.
 
 ## Dependencies
 
-- `context/profile.md` contains `user_linkedin_url`
+- `context/profile/profile.md` contains `user_linkedin_url`
 - `RAPIDAPI_KEY` in `.env`
 - Scripts:
   - `scripts/rapidapi_post_reactions.mjs` — fetch post reactions → CSV in `inputs/post-engagers/`

@@ -1,6 +1,6 @@
 ---
 name: score-leads
-description: Score and qualify leads with Claude Haiku API. CSV-only output.
+description: Score and qualify a lead CSV against the ICP using Claude Haiku. Appends a score (0-100) and why_match column to the input CSV. Works with pipeline output, LinkedIn connections exports, and post-engager CSVs. Requires ANTHROPIC_API_KEY. Triggers on /score-leads or any message like "score these leads", "qualify this list", or "run scoring".
 ---
 
 # Skill: Score Leads

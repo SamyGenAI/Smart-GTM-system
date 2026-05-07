@@ -1,6 +1,6 @@
 ---
 name: enrich-leads
-description: Enrich qualified leads with Haiku + Web Search. Adds outreach angle and DM copy. CSV-only.
+description: Research scored leads with Claude Haiku + Web Search and write two personalized LinkedIn DMs per lead. Only processes leads at or above a score threshold (default 60). Appends outreach_angle, dm_sequence_1, dm_sequence_2 columns. Requires ANTHROPIC_API_KEY and context/brief/brief.md. Triggers on /enrich-leads or any message like "enrich leads", "write DMs", "research these prospects", or "add outreach copy".
 ---
 
 # Skill: Enrich Leads
