@@ -19,7 +19,6 @@ When you set it up, the AI reads your **LinkedIn profile** and **business websit
 | **Enrich** | The AI researches each prospect online and writes two LinkedIn DMs personalized to *both* their context and your offer | Outreach that sounds human, at scale, without a copywriter |
 | **Export** | One clean CSV with name, LinkedIn URL, score, and DMs | Plug straight into your CRM, Notion, or outreach tool |
 
-> **Why post engagers matter:** anyone who liked or commented on a LinkedIn post about your topic has already raised their hand. Pulling engagers from a competitor's post or a thought leader's post in your niche is one of the highest-converting warm-lead sources available, and this system automates it.
 
 ---
 
