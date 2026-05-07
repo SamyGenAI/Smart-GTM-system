@@ -10,7 +10,7 @@ This system is built around one core idea: **every output is personalized using 
 
 When you set it up, the AI reads your **LinkedIn profile** and **business website** to learn who you are, what you sell, and how you talk about it. Every later step : searching, scoring, writing DMs...is filtered through that context, so the leads it finds and the messages it writes actually sound like you and target your real ideal client.
 
-| Step | What happens | Business outcome |
+| Features | What happens | Business outcome |
 |------|-------------|------------------|
 | **Personalize** | The AI pulls your LinkedIn profile, scrapes your website, and asks you 4 short questions about your offer, ICP, and competitors | The system learns your voice, positioning, and ideal client once, then reuses that everywhere |
 | **Find** | The AI searches the web for people or companies matching your ICP | A fresh list of targeted prospects in minutes |
