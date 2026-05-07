@@ -166,12 +166,12 @@ function extractFirstName(title) {
 const MAX_BRIEF_CHARS = 1500;
 
 function loadContext() {
-  if (!fs.existsSync("context/brief.md")) {
+  if (!fs.existsSync("context/brief/brief.md")) {
     throw new Error(
-      "Missing context/brief.md. Create a short brief (offer + ICP + angle bias, ~150 words) before running enrichment.",
+      "Missing context/brief/brief.md. Create a short brief (offer + ICP + angle bias, ~150 words) before running enrichment.",
     );
   }
-  const raw = fs.readFileSync("context/brief.md", "utf8");
+  const raw = fs.readFileSync("context/brief/brief.md", "utf8");
   const trimmed = raw.length > MAX_BRIEF_CHARS ? raw.slice(0, MAX_BRIEF_CHARS) : raw;
   return { brief: trimmed };
 }

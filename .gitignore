@@ -26,3 +26,8 @@ outputs/raw/
 # Sync script live data outputs (contain metrics, not committed)
 outputs/campaigns/**/results-sync.json
 context/signal-performance-sync.json
+
+# Personalized context files (user-specific, not for distribution)
+# Templates (*-template.md) ARE tracked and pushed — only the filled-in versions are ignored
+context/*/*.md
+!context/*/*-template.md

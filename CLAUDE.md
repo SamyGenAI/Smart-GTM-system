@@ -2,13 +2,16 @@
 
 Persistent GTM context for this repo. Full details live in `context/`.
 
+> **New user?** Run setup first:
+> `Read skills/setup/SKILL.md and set up this repo for [your-domain.com]`
+
 ## Company
 
-**Igentiv** helps B2B founders build a premium LinkedIn presence and generate qualified leads.
+**[YOUR_COMPANY]** helps [who] do [what outcome].
 
-GTM motion: founder-led LinkedIn outreach  
-Primary channel: LinkedIn DM  
-Core offer: premium content + qualified founder conversations
+GTM motion: [e.g. founder-led LinkedIn outreach]
+Primary channel: [e.g. LinkedIn DM]
+Core offer: [e.g. premium content + qualified founder conversations]
 
 ## Stack
 
@@ -35,7 +38,7 @@ RapidAPI post engagers -> skills/post-engagers -> skills/score-leads
 ```text
 Read skills/setup/SKILL.md and set up this repo for [your-domain.com]
 
-Read skills/find-leads/SKILL.md and find 25 Tier 1 leads in EU/US B2B
+Read skills/find-leads/SKILL.md and find 25 Tier 1 leads in [your target geography/segment]
 
 Read skills/score-leads/SKILL.md and score this lead list with Claude Haiku
 
@@ -48,6 +51,6 @@ Read skills/export-leads/SKILL.md and export outputs/[date]-[campaign]-leads.csv
 
 ## Current Priorities
 
-- Build first 150 Tier 1 LinkedIn leads
-- Score and prioritize with Haiku
-- Send personalized DMs
+- [Your top GTM priority this quarter]
+- [Second priority]
+- [Third priority]

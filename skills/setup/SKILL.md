@@ -18,13 +18,17 @@ Read skills/setup/SKILL.md and set up this repo for [your-domain.com]
 node scripts/rapidapi_linkedin_profile.mjs "<your_linkedin_url>"
 ```
 3. Use websearch to get as much details as possible from `<your_website_url>`
-4. Write/update:
-   - `context/profile.md`
-   - `context/icp-definition.md`
-   - `context/positioning.md`
-   - `context/brief.md`
-   - `competitor-radar.md`
-   - `CLAUDE.md`
+4. For each context file, read the corresponding template to understand the required structure, then create the adapted file alongside it — never modify the template:
+
+| Template (read, never touch) | Adapted file (create/overwrite with real data) |
+|------------------------------|------------------------------------------------|
+| `context/profile/profile-template.md` | `context/profile/profile.md` |
+| `context/icp-definition/icp-definition-template.md` | `context/icp-definition/icp-definition.md` |
+| `context/positioning/positioning-template.md` | `context/positioning/positioning.md` |
+| `context/brief/brief-template.md` | `context/brief/brief.md` |
+| `context/competitor-radar/competitor-radar-template.md` | `context/competitor-radar/competitor-radar.md` |
+
+5. Update `CLAUDE.md` with the user's company name, GTM motion, and current priorities.
 
 ## Required question 1
 
@@ -59,18 +63,20 @@ Ask once:
 
 ## Output checklist
 
-- [ ] `your_linkedin_url` saved in `context/profile.md`
-- [ ] If RapidAPI data is available, user's LinkedIn profile details are filled in `context/profile.md` under `User's LinkedIn profile` section
-- [ ] Business details and `<your_website_url>` are saved in `context/profile.md` under `The Company` section.
-- [ ] `context/icp-definition.md` and `context/positioning.md` are filled using details from Linkedin profile, user answers and website content.
-- [ ] `context/competitor-radar.md` is filled with competitor details from question 5
+- [ ] All `*-template.md` files are untouched — no edits, no overwrites.
+- [ ] `context/profile/profile.md` exists and is populated (LinkedIn URL, company details).
+- [ ] If RapidAPI data is available, LinkedIn profile details are filled under `User's LinkedIn profile`.
+- [ ] `context/icp-definition/icp-definition.md` and `context/positioning/positioning.md` are filled from profile, answers, and website content.
+- [ ] `context/brief/brief.md` contains a concise offer + ICP summary (max ~150 words).
+- [ ] `context/competitor-radar/competitor-radar.md` is filled with competitor details from question 5.
 - [ ] `CLAUDE.md` is personalized to user and company info.
 
 ## Rules
 
-- Never infer a fact, all data stored must be accurate based on : user answers, Linkedin profile and website content.
-- If an information is missing, don't try to guess it or to invent it
-- Be concise, we must only keep useful data for specialized outreach.
+- **Never edit a `*-template.md` file.** Templates are read-only reference files. Always write user data into the adapted `*.md` file (same name, no `-template` suffix).
+- Never infer a fact — all data stored must be accurate based on: user answers, LinkedIn profile, and website content.
+- If information is missing, leave the field blank or note `[unknown]`. Never guess or invent.
+- Be concise — only keep data that is useful for specialized outreach.
 
 ## Next command
 

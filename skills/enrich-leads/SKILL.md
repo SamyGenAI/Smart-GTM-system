@@ -5,7 +5,7 @@ description: Enrich qualified leads with Haiku + Web Search. Adds outreach angle
 
 # Skill: Enrich Leads
 
-Generic skill: works for any company. Company specifics are loaded at runtime from a SHORT `context/brief.md` (offer + ICP only, max ~150 words). The long `positioning.md` and `icp-definition.md` files are NOT sent to the API.
+Generic skill: works for any company. Company specifics are loaded at runtime from a SHORT `context/brief/brief.md` (offer + ICP only, max ~150 words). The long `positioning.md` and `icp-definition.md` files are NOT sent to the API.
 
 ## Model + Source
 
@@ -32,7 +32,7 @@ All inputs **must be scored first** with `skills/score-leads`. The `score` colum
 
 **`inputs/post-engagers/`** — drop post-engager CSVs here (from `skills/post-engagers`). Columns: `profile_name`/`name`, `profile_url`/`url`, `headline`. Both scripts auto-normalize these columns.
 
-Also required: `context/brief.md`. Hard cap: 1500 chars sent to the model. Per-lead fields are clipped before sending (`title` 300, `snippet` 300, `highlights` 500, `why_match` 240) to keep prompts small.
+Also required: `context/brief/brief.md`. Hard cap: 1500 chars sent to the model. Per-lead fields are clipped before sending (`title` 300, `snippet` 300, `highlights` 500, `why_match` 240) to keep prompts small.
 
 ## Output (strict, CSV-only)
 

@@ -17,7 +17,7 @@ Any of the following CSV sources (the script auto-normalizes LinkedIn export col
 - LinkedIn Connections export → drop in `inputs/connections/`
 - Post-engagers export → drop in `inputs/post-engagers/`
 
-Context files: `context/icp-definition.md`, `context/positioning.md`
+Context files: `context/icp-definition/icp-definition.md`, `context/positioning/positioning.md`
 
 ## Output Contract (strict)
 
