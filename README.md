@@ -1,6 +1,6 @@
 # Smart Creator GTM System
 
-An AI-powered lead generation system for B2B founders. Type one slash command, get a ready-to-send outreach list with personalized LinkedIn DMs — no spreadsheets, no manual research.
+An AI-powered lead generation system for B2B founders. Type one slash command, get a ready-to-send outreach list with personalized LinkedIn DMs. No spreadsheets, no manual research.
 
 ---
 
@@ -12,14 +12,14 @@ When you set it up, the AI reads your **LinkedIn profile** and **business websit
 
 | Step | What happens | Business outcome |
 |------|-------------|------------------|
-| **Personalize** | The AI pulls your LinkedIn profile, scrapes your website, and asks you 4 short questions about your offer, ICP, and competitors | The system learns your voice, positioning, and ideal client — once, then reused everywhere |
+| **Personalize** | The AI pulls your LinkedIn profile, scrapes your website, and asks you 4 short questions about your offer, ICP, and competitors | The system learns your voice, positioning, and ideal client once, then reuses that everywhere |
 | **Find** | The AI searches the web for people or companies matching your ICP | A fresh list of targeted prospects in minutes |
 | **Score** | Every lead is rated 0–100 against *your* ICP and tagged Tier 1 / 2 / 3 | You only spend time on leads worth pursuing |
-| **Capture warm leads** | Pull everyone who reacted to *any* LinkedIn post — yours, a competitor's, an industry leader's, an influencer's | Turn other people's audiences into your prospect list |
+| **Capture warm leads** | Pull everyone who reacted to *any* LinkedIn post (yours, a competitor's, an industry leader's, an influencer's) | Turn other people's audiences into your prospect list |
 | **Enrich** | The AI researches each prospect online and writes two LinkedIn DMs personalized to *both* their context and your offer | Outreach that sounds human, at scale, without a copywriter |
 | **Export** | One clean CSV with name, LinkedIn URL, score, and DMs | Plug straight into your CRM, Notion, or outreach tool |
 
-> **Why post engagers matter:** anyone who liked or commented on a LinkedIn post about your topic has already raised their hand. Pulling engagers from a competitor's post or a thought leader's post in your niche is one of the highest-converting warm-lead sources available — and this system automates it.
+> **Why post engagers matter:** anyone who liked or commented on a LinkedIn post about your topic has already raised their hand. Pulling engagers from a competitor's post or a thought leader's post in your niche is one of the highest-converting warm-lead sources available, and this system automates it.
 
 ---
 
@@ -46,7 +46,7 @@ Pick one. Both work identically with this repo.
 
 ### 3. Get your API keys
 
-Each link below leads to a signup page. All three services have free tiers — you can start without paying.
+Each link below leads to a signup page. All three services have free tiers, so you can start without paying.
 
 | Key | What it powers | Required? | Get it here |
 |-----|---------------|-----------|-------------|
@@ -54,21 +54,21 @@ Each link below leads to a signup page. All three services have free tiers — y
 | `EXA_API_KEY` | Searching for leads | Yes | [exa.ai](https://exa.ai/) |
 | `RAPIDAPI_KEY` | Pulling LinkedIn post engagers + your LinkedIn profile | Optional, but unlocks warm leads | Subscribe to [linkedin-api8 on RapidAPI](https://rapidapi.com/rockapis-rockapis-default/api/linkedin-api8) |
 
-Keep these three keys somewhere handy — you'll paste them into a file in the next step.
+Keep these three keys somewhere handy. You'll paste them into a file in the next step.
 
 ---
 
 ## Setup (one time, ~15 minutes)
 
-### Step 1 — Download this repository
+### Step 1: Download this repository
 
 1. On the GitHub page, click the green **Code** button → **Download ZIP**
 2. Unzip the file anywhere you like (Desktop, Documents, etc.)
 3. You should now have a folder named something like `smart-creator-gtm-system`
 
-### Step 2 — Open the folder in your AI editor
+### Step 2: Open the folder in your AI editor
 
-This is the most common stumbling point — make sure you open the **whole folder**, not a single file.
+This is the most common stumbling point: make sure you open the **whole folder**, not a single file.
 
 **In Cursor:**
 1. Launch Cursor
@@ -83,9 +83,9 @@ This is the most common stumbling point — make sure you open the **whole folde
 4. Confirm by clicking **Select Folder**
 5. Open Claude Code from the sidebar or by pressing `Ctrl+Esc` (Windows) / `Cmd+Esc` (Mac)
 
-> ⚠️ **Important:** open the folder *at its root* — the one that contains `README.md`. If you open a parent folder or a sub-folder, the slash commands and skills won't load.
+> ⚠️ **Important:** open the folder *at its root* (the one that contains `README.md`). If you open a parent folder or a sub-folder, the slash commands and skills won't load.
 
-### Step 3 — Add your API keys
+### Step 3: Add your API keys
 
 1. In the file explorer (left sidebar), find a file named **`.env.example`**
 2. Right-click it → **Copy**, then right-click in empty space → **Paste**. You now have `.env.example - Copy`
@@ -110,7 +110,7 @@ RAPIDAPI_KEY=xxxxx
 
 > Your `.env` file stays on your machine only. It is listed in `.gitignore` and is never shared, committed, or sent to any server other than the API providers.
 
-### Step 4 — Install the project dependencies
+### Step 4: Install the project dependencies
 
 1. Open a terminal inside your editor:
    - In Cursor / VS Code: `Terminal → New Terminal` (or `Ctrl+` ` on Windows / `Cmd+` ` on Mac)
@@ -121,9 +121,9 @@ RAPIDAPI_KEY=xxxxx
 npm install
 ```
 
-4. Wait for it to finish. You'll see a lot of text scroll by — that's normal. It usually takes under a minute. When it's done, you see your prompt again (`PS C:\...>` on Windows or `~/...$` on Mac).
+4. Wait for it to finish. You'll see a lot of text scroll by, which is normal. It usually takes under a minute. When it's done, you see your prompt again (`PS C:\...>` on Windows or `~/...$` on Mac).
 
-### Step 5 — Run the setup command
+### Step 5: Run the setup command
 
 In the AI chat panel of your editor, type the slash command:
 
@@ -139,17 +139,17 @@ Then send. The AI will:
 4. Ask **who your ideal client is**
 5. Ask **who your competitors are** (optional)
 
-Answer naturally — the AI will read your LinkedIn profile, scrape your website, and combine that with your answers to build five personalized context files in `context/`. These files drive every later command.
+Answer naturally. The AI will read your LinkedIn profile, scrape your website, and combine that with your answers to build five personalized context files in `context/`. These files drive every later command.
 
 When setup finishes, you'll see a confirmation. You're now ready to generate leads.
 
 ---
 
-## Daily workflow — slash commands
+## Daily workflow: slash commands
 
 Once setup is done, every step is a single slash command in the AI chat. Just type `/` and pick from the menu, or type the full command.
 
-### Path A — Cold outreach (find new leads)
+### Path A: Cold outreach (find new leads)
 
 ```
 /find-leads 25 B2B SaaS founders in France
@@ -175,9 +175,9 @@ For each lead scored 60+, the AI does deep research and writes two ready-to-send
 
 You get one clean CSV: `outputs/[date]-leads.csv`. Drop it into your CRM or outreach tool.
 
-### Path B — Warm outreach (LinkedIn post engagers)
+### Path B: Warm outreach (LinkedIn post engagers)
 
-Anyone who liked or commented on a LinkedIn post is a warm lead. Pull them from any post — yours, a competitor's, an industry leader's.
+Anyone who liked or commented on a LinkedIn post is a warm lead. Pull them from any post (yours, a competitor's, an industry leader's).
 
 ```
 /post-engagers
@@ -202,7 +202,7 @@ Then run the same `/score-leads` → `/enrich-leads` → `/export-leads` chain.
 
 ---
 
-## Output file — what you get
+## Output file: what you get
 
 Every export produces a CSV with these columns:
 
@@ -215,26 +215,26 @@ Every export produces a CSV with these columns:
 | `tier` | tier1 / tier2 / tier3 |
 | `why_match` | One sentence on why they fit (or don't) |
 | `outreach_angle` | The specific hook the DMs are built around |
-| `dm_sequence_1` | First LinkedIn DM — ready to send |
-| `dm_sequence_2` | Follow-up DM — a fresh angle, not a bump |
+| `dm_sequence_1` | First LinkedIn DM, ready to send |
+| `dm_sequence_2` | Follow-up DM with a fresh angle, not a bump |
 
 ---
 
 ## Troubleshooting
 
-**"Slash commands don't appear in the chat"** — Two common causes:
+**"Slash commands don't appear in the chat"**: two common causes.
 1. You opened a parent folder or sub-folder instead of the project root. Close the folder and reopen the one that contains `README.md` and `package.json`.
 2. You're running an older AI editor version that doesn't read `.claude/commands/` or `.cursor/commands/` yet. Update your editor to the latest version, or fall back to the long-form prompt: `Read skills/setup/SKILL.md and follow it`.
 
-**"Cannot find module" error** — Run `npm install` in the terminal again from the project folder.
+**"Cannot find module" error**: run `npm install` in the terminal again from the project folder.
 
-**"Invalid API key" error** — Open `.env` and double-check the key. No quotes, no spaces, and make sure the file is named exactly `.env` (not `.env.txt`).
+**"Invalid API key" error**: open `.env` and double-check the key. No quotes, no spaces, and make sure the file is named exactly `.env` (not `.env.txt`).
 
-**Leads come back empty** — Try a broader search query. Instead of "SaaS founders in Lyon", try "SaaS founders in France".
+**Leads come back empty**: try a broader search query. Instead of "SaaS founders in Lyon", try "SaaS founders in France".
 
-**DMs say `NO_SIGNAL`** — The AI couldn't find specific public information about that prospect. Either widen the search or skip that lead — leaving the DM blank is better than fabricating one.
+**DMs say `NO_SIGNAL`**: the AI couldn't find specific public information about that prospect. Either widen the search or skip that lead. Leaving the DM blank is better than fabricating one.
 
-**LinkedIn profile pull fails during setup** — The `RAPIDAPI_KEY` is optional. Setup will skip that step and use your answers + website only. You can always re-run `/setup` later once the key is added.
+**LinkedIn profile pull fails during setup**: the `RAPIDAPI_KEY` is optional. Setup will skip that step and use your answers + website only. You can always re-run `/setup` later once the key is added.
 
 ---
 
