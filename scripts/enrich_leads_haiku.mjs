@@ -117,6 +117,45 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Normalize a raw CSV row from any supported input format into the internal schema.
+ *
+ * Supported source formats:
+ *  - Pipeline output (find-leads / score-leads): already has title, url, score, etc.
+ *  - LinkedIn Connections export (inputs/connections/): First Name, Last Name, URL, Position, Company
+ *  - Post-engagers export (inputs/post-engagers/): profile_name or name, profile_url or url, headline
+ */
+function normalizeRow(row) {
+  const r = { ...row };
+
+  if (!r.title) {
+    if (r["First Name"] || r["Last Name"]) {
+      const fname = String(r["First Name"] || "").trim();
+      const lname = String(r["Last Name"] || "").trim();
+      r.title = [fname, lname].filter(Boolean).join(" ");
+    } else if (r["profile_name"]) {
+      r.title = String(r["profile_name"]).trim();
+    } else if (r["name"]) {
+      r.title = String(r["name"]).trim();
+    }
+  }
+
+  if (!r.url) {
+    r.url = r["URL"] || r["Profile URL"] || r["profile_url"] || r["linkedin_url"] || "";
+  }
+
+  if (!r.snippet) {
+    if (r["Position"] || r["Company"]) {
+      const parts = [r["Position"], r["Company"]].filter(Boolean);
+      r.snippet = parts.join(" at ");
+    } else if (r["headline"]) {
+      r.snippet = String(r["headline"]).trim();
+    }
+  }
+
+  return r;
+}
+
 function extractFirstName(title) {
   if (!title) return "";
   const beforePipe = String(title).split("|")[0].trim();
@@ -143,28 +182,15 @@ function buildSystemPrompt({ brief }) {
 COMPANY BRIEF (so you know who is sending and who they sell to):
 ${brief}
 
-How to write the DMs:
+Treat every DM as a post-connection note, not a cold pitch. Frame it as research so the prospect doesn't wonder "why is this stranger asking me?".
 
-- Research the prospect: their posts, bio, website, articles. The research is for YOU. It does not appear in the DM. Never cite or attribute a post.
-- Frame the DM as research, not a pitch. The frame: you are researching how a specific type of company handles a specific process or challenge, and you want to know if the prospect personally handles it. This frame answers the implicit "why is this stranger asking me?" and positions you as someone trying to learn, not sell.
+Here are some examples (not templates) :
 
-Frame to adapt (do NOT copy verbatim, swap in real specifics from your research):
-"Hey [first_name], thanks for connecting. I'm researching how [type of company they run] handle [specific process from their world]. Is that something you deal with, or someone else on your team?"
+> "Saw your post on [specific topic], the hook was the best thing in my feed this week. Have you thought about [specific improvement related to topic] ?"
 
-The "[type of company]" must be specific (e.g. "B2B SEO agencies", "ABM consultancies for B2B SaaS", "AI-content studios"), not generic ("companies", "founders").
-The "[specific process]" must come from your research: a methodology they use, a metric they track, a transition their industry is in, a tradeoff they wrestle with. Not a fabricated detail.
+> "Reaching out because you likely run [Founder]'s vendor stack, we build [solution to their problem] for founders in your stage without eating their calendar. Happy to send a sample onboarding plan if useful."
 
-Length: max 2 short sentences, around 30 words. If a sentence has more than one comma, it is too long.
-Vary the topic and phrasing across leads. Don't mechanically reuse the exact same wording.
-
-Hard constraints:
-- Use the actual first name provided in the lead context. Never output "{{first_name}}", "[first_name]", or any placeholder.
-- Never invent facts. If no real, specific process or angle shows up in research, output NO_SIGNAL and leave both DMs empty.
-- Never cite a LinkedIn post or article in the DM text. Treat all post and article content as background research.
-- No em dash. Use a period or comma.
-- No buzzwords (synergy, leverage, touch base, circle back, alignment, move the needle, deep dive, bandwidth, innovative, cutting-edge, world-class, game-changing, disruptive, etc.).
-- No pleasantries beyond a simple "thanks for connecting".
-- Do not pitch. Ask a question.
+> "Noticed [Founder Name]'s [growth lever] is a growth lever for you, we run [service or offer] for [company type] so the in-house team can stay on [more important task]. Worth a 20-min comparison to what you've got now ?"
 
 DM2 takes a different angle from DM1 and gives the prospect something worth their time: a sharp observation about their domain that you want their take on, a contrast or tension you've noticed in their space, or a related angle that opens a new thread. Open directly with the new content, not with a meta line.
 
@@ -270,7 +296,12 @@ function parseEnrichment(text) {
 async function main() {
   const args = parseArgs(process.argv);
   if (!args.input) {
-    throw new Error("Missing --input. Example: node scripts/enrich_leads_sonnet.mjs -i outputs/leads-scored.csv -o outputs/leads-enriched.csv");
+    throw new Error(
+      "Missing --input. Examples:\n" +
+      "  node scripts/enrich_leads_haiku.mjs -i outputs/leads-scored.csv -o outputs/leads-enriched.csv\n" +
+      "  node scripts/enrich_leads_haiku.mjs -i inputs/connections/my-connections.csv -o outputs/connections-enriched.csv\n" +
+      "  node scripts/enrich_leads_haiku.mjs -i inputs/post-engagers/engagers.csv -o outputs/engagers-enriched.csv",
+    );
   }
   if (!args.outCsv) {
     throw new Error("Missing --out-csv. This script writes CSV output only.");
@@ -279,12 +310,21 @@ async function main() {
     throw new Error("Missing ANTHROPIC_API_KEY in environment.");
   }
 
-  const allLeads = readCsv(args.input);
-  if (allLeads.length === 0) {
+  const rawLeads = readCsv(args.input);
+  if (rawLeads.length === 0) {
     throw new Error("Input CSV has no leads.");
   }
-  if (!Object.prototype.hasOwnProperty.call(allLeads[0], "score")) {
-    throw new Error("Input CSV is missing required 'score' column. Run skills/score-leads first.");
+
+  const allLeads = rawLeads.map(normalizeRow);
+
+  const hasScoreCol = Object.prototype.hasOwnProperty.call(rawLeads[0], "score");
+  if (!hasScoreCol) {
+    throw new Error(
+      "Input CSV is missing required 'score' column.\n" +
+      "Score your leads first:\n" +
+      "  node scripts/score_leads_haiku.mjs -i <your-csv> -o outputs/leads-scored.csv\n" +
+      "Inputs from inputs/connections/ and inputs/post-engagers/ must be scored before enrichment.",
+    );
   }
 
   const minScore = Number.isFinite(args.minScore) ? args.minScore : 60;

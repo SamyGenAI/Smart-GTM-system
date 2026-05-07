@@ -18,8 +18,21 @@ Research `tier1` / `tier2` leads (score >= 60) and write post-connection LinkedI
 
 ## Input
 
-- Scored leads CSV from `skills/score-leads` (must already include `score` column).
-- `context/brief.md` (REQUIRED). Hard cap: 1500 chars sent to the model. Per-lead fields are clipped before sending (`title` 300, `snippet` 300, `highlights` 500, `why_match` 240) to keep prompts small.
+All inputs **must be scored first** with `skills/score-leads`. The `score` column is required — only leads at or above `--min-score` (default 60) are enriched.
+
+### Supported upstream sources
+
+| Source | Drop raw CSV in | Then score with |
+|---|---|---|
+| Pipeline (`find-leads`) | `outputs/` | `score_leads_haiku.mjs` |
+| LinkedIn Connections export | `inputs/connections/` | `score_leads_haiku.mjs` |
+| Post-engagers (RapidAPI) | `inputs/post-engagers/` | `score_leads_haiku.mjs` |
+
+**`inputs/connections/`** — drop your LinkedIn connections CSV here (exported from linkedin.com/mynetwork/invite-connect/connections/). LinkedIn exports: `First Name`, `Last Name`, `URL`, `Email Address`, `Company`, `Position`, `Connected On`. Both scoring and enrichment scripts auto-normalize these columns.
+
+**`inputs/post-engagers/`** — drop post-engager CSVs here (from `skills/post-engagers`). Columns: `profile_name`/`name`, `profile_url`/`url`, `headline`. Both scripts auto-normalize these columns.
+
+Also required: `context/brief.md`. Hard cap: 1500 chars sent to the model. Per-lead fields are clipped before sending (`title` 300, `snippet` 300, `highlights` 500, `why_match` 240) to keep prompts small.
 
 ## Output (strict, CSV-only)
 
@@ -58,13 +71,46 @@ Length: max 2 short sentences.
 
 ## Quick Start
 
+**From pipeline output:**
 ```bash
-node scripts/enrich_leads_sonnet.mjs \
+# Step 1 — score
+node scripts/score_leads_haiku.mjs \
+  -i outputs/leads.csv \
+  -o outputs/leads-scored.csv
+
+# Step 2 — enrich
+node scripts/enrich_leads_haiku.mjs \
   -i outputs/leads-scored.csv \
   -o outputs/leads-enriched.csv \
-  -s 60 \
-  --sleep-ms 15000 \
-  --web-searches 1
+  -s 60 --sleep-ms 15000 --web-searches 1
+```
+
+**From LinkedIn connections (`inputs/connections/`):**
+```bash
+# Step 1 — score
+node scripts/score_leads_haiku.mjs \
+  -i inputs/connections/my-connections.csv \
+  -o outputs/connections-scored.csv
+
+# Step 2 — enrich
+node scripts/enrich_leads_haiku.mjs \
+  -i outputs/connections-scored.csv \
+  -o outputs/connections-enriched.csv \
+  -s 60 --sleep-ms 15000 --web-searches 1
+```
+
+**From post-engagers (`inputs/post-engagers/`):**
+```bash
+# Step 1 — score
+node scripts/score_leads_haiku.mjs \
+  -i inputs/post-engagers/engagers.csv \
+  -o outputs/engagers-scored.csv
+
+# Step 2 — enrich
+node scripts/enrich_leads_haiku.mjs \
+  -i outputs/engagers-scored.csv \
+  -o outputs/engagers-enriched.csv \
+  -s 60 --sleep-ms 15000 --web-searches 1
 ```
 
 Defaults: model = `claude-haiku-4-5-20251001`, `--web-searches 1`. Override with `-m claude-sonnet-4-6` if you want Sonnet. Bump `--web-searches` only if angles consistently come back as `NO_SIGNAL`.

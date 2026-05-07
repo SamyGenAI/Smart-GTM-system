@@ -1,7 +1,7 @@
 # Skill: Post Engagers (RapidAPI)
 
 **Duration:** 2-8 minutes  
-**Output:** `outputs/[date]-post-engagers-raw.csv`
+**Output:** `inputs/post-engagers/[date]-post-engagers-raw.csv`
 
 ## Quick Start
 
@@ -17,9 +17,9 @@ Pull people who reacted to a LinkedIn post and turn them into warm leads.
 
 - `context/profile.md` contains `user_linkedin_url`
 - `RAPIDAPI_KEY` in `.env`
-- Uses only RapidAPI scripts:
-  - `skills/post-engagers/scripts/rapidapi-linkedin.sh`
-  - `skills/post-engagers/scripts/rapidapi-post-reactions.sh`
+- Scripts:
+  - `scripts/rapidapi_post_reactions.mjs` — fetch post reactions → CSV in `inputs/post-engagers/`
+  - `scripts/rapidapi_linkedin_profile.mjs` — fetch a single LinkedIn profile (JSON)
 
 ## Output Columns
 
@@ -30,12 +30,35 @@ lead_id,name,headline,linkedin_url,engagement_count,repeat_engager,latest_engage
 - `source` is always `post-engagers`.
 - Keep only person URLs (`linkedin.com/in/`).
 
+## Quick Commands
+
+```bash
+# Pull reactions from specific posts (comma-separated URLs)
+node scripts/rapidapi_post_reactions.mjs \
+  --urls "https://www.linkedin.com/posts/HANDLE_activity-XXXX,https://www.linkedin.com/posts/HANDLE_activity-YYYY" \
+  --max-pages 5
+
+# Pull from a text file with one URL per line
+node scripts/rapidapi_post_reactions.mjs \
+  --urls-file inputs/post-engagers/post-urls.txt \
+  --max-pages 5
+
+# Fetch a single LinkedIn profile (JSON to stdout)
+node scripts/rapidapi_linkedin_profile.mjs adamselipsky
+
+# Score the engager CSV immediately after
+node scripts/score_leads_haiku.mjs \
+  -i inputs/post-engagers/[date]-post-engagers-raw.csv \
+  -o outputs/[date]-post-engagers-scored.csv \
+  -b 8
+```
+
 ## Run Summary
 
 Always print:
 
 ```
 Post-engagers pull complete.
-Output: outputs/[date]-post-engagers-raw.csv
+Output: inputs/post-engagers/[date]-post-engagers-raw.csv
 Next step: Read skills/score-leads/SKILL.md and score this list with Claude Haiku.
 ```

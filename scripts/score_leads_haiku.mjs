@@ -123,6 +123,45 @@ function parseScoreCsv(text) {
   return scoredByUrl;
 }
 
+/**
+ * Normalize a raw CSV row from any supported input format into the internal schema.
+ *
+ * Supported source formats:
+ *  - Pipeline output (find-leads): already has url, title, snippet, etc.
+ *  - LinkedIn Connections export (inputs/connections/): First Name, Last Name, URL, Position, Company
+ *  - Post-engagers export (inputs/post-engagers/): profile_name or name, profile_url or url, headline
+ */
+function normalizeRow(row) {
+  const r = { ...row };
+
+  if (!r.url) {
+    r.url = r["URL"] || r["Profile URL"] || r["profile_url"] || r["linkedin_url"] || "";
+  }
+
+  if (!r.title) {
+    if (r["First Name"] || r["Last Name"]) {
+      const fname = String(r["First Name"] || "").trim();
+      const lname = String(r["Last Name"] || "").trim();
+      r.title = [fname, lname].filter(Boolean).join(" ");
+    } else if (r["profile_name"]) {
+      r.title = String(r["profile_name"]).trim();
+    } else if (r["name"]) {
+      r.title = String(r["name"]).trim();
+    }
+  }
+
+  if (!r.snippet) {
+    if (r["Position"] || r["Company"]) {
+      const parts = [r["Position"], r["Company"]].filter(Boolean);
+      r.snippet = parts.join(" at ");
+    } else if (r["headline"]) {
+      r.snippet = String(r["headline"]).trim();
+    }
+  }
+
+  return r;
+}
+
 const ICP_SCORING_RUBRIC = `
 Target profile:
 - B2B founder/agency owner
@@ -195,7 +234,7 @@ async function main() {
     throw new Error("Missing --out-csv. This script writes CSV output only.");
   }
 
-  const leads = readCsv(args.input);
+  const leads = readCsv(args.input).map(normalizeRow);
   if (leads.length === 0) {
     throw new Error("Input CSV has no leads.");
   }

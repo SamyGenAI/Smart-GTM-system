@@ -11,8 +11,13 @@ description: Score and qualify leads with Claude Haiku API. CSV-only output.
 
 ## Input
 
-- Lead list CSV from `skills/find-leads` or `skills/post-engagers`
-- Context files: `context/icp-definition.md`, `context/positioning.md`
+Any of the following CSV sources (the script auto-normalizes LinkedIn export columns):
+
+- Pipeline output from `skills/find-leads` (`outputs/`)
+- LinkedIn Connections export → drop in `inputs/connections/`
+- Post-engagers export → drop in `inputs/post-engagers/`
+
+Context files: `context/icp-definition.md`, `context/positioning.md`
 
 ## Output Contract (strict)
 
@@ -35,10 +40,22 @@ No JSON output. CSV only.
 ## Quick Start
 
 ```bash
+# Pipeline output
 node scripts/score_leads_haiku.mjs \
   -i outputs/2026-04-26-leads.csv \
   -o outputs/2026-04-26-leads-scored.csv \
-  -m claude-haiku-4-5-20251001 \
+  -b 8
+
+# LinkedIn connections export
+node scripts/score_leads_haiku.mjs \
+  -i inputs/connections/my-connections.csv \
+  -o outputs/connections-scored.csv \
+  -b 8
+
+# Post-engagers export
+node scripts/score_leads_haiku.mjs \
+  -i inputs/post-engagers/engagers.csv \
+  -o outputs/engagers-scored.csv \
   -b 8
 ```
 
