@@ -1,32 +1,42 @@
 ---
 name: export-leads
-description: Export final leads list to a clean CSV.
+description: Export final enriched leads to a clean CSV ready for Notion or CRM.
 ---
 
 # Skill: Export Leads
 
 ## Purpose
 
-Create one final CSV for outreach.
+Take any enriched CSV and produce one clean, normalized outreach list.
 
-## Output Path
+## Quick Start
 
-`outputs/[date]-[campaign]-leads.csv`
+```bash
+node scripts/export_leads.mjs \
+  -i outputs/[date]-leads-enriched.csv \
+  -c [campaign-name]
+```
 
-## Columns
+## Options
 
-`lead_id,name,company,title,linkedin_url,score,tier,dm_angle,personalization_hook,source`
+| Flag | Default | Description |
+|---|---|---|
+| `-i` / `--input` | required | Enriched CSV from `enrich_leads_haiku.mjs` |
+| `-o` / `--out` | `outputs/[date]-[campaign]-leads.csv` | Output path |
+| `-s` / `--min-score` | `0` (all rows) | Only export leads at or above this score |
+| `-c` / `--campaign` | `leads` | Label used in the output filename |
 
-## Rules
+## Output Columns
 
-1. Keep all rows (including `exclude`)
-2. Empty values stay empty, not `null`
-3. UTF-8 CSV
+`lead_id, name, headline, linkedin_url, score, tier, why_match, outreach_angle, dm_sequence_1, dm_sequence_2, source`
+
+- `tier` is auto-derived from `score` (80-100 → tier1, 60-79 → tier2, 40-59 → tier3, 0-39 → exclude)
+- Works with all upstream sources: find-leads, connections, post-engagers
 
 ## Run Summary
 
 ```
 Export complete.
-CSV: outputs/[date]-[campaign]-leads.csv
-Rows: {N}
+CSV  : outputs/[date]-[campaign]-leads.csv
+Rows : {N}
 ```

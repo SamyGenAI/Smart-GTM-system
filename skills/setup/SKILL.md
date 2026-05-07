@@ -15,7 +15,7 @@ Read skills/setup/SKILL.md and set up this repo for [your-domain.com]
 2. If `RAPIDAPI_KEY` exists, fetch LinkedIn profile once with:
 
 ```bash
-skills/post-engagers/scripts/rapidapi-linkedin.sh "<your_linkedin_url>"
+node scripts/rapidapi_linkedin_profile.mjs "<your_linkedin_url>"
 ```
 3. Use websearch to get as much details as possible from `<your_website_url>`
 4. Write/update:
