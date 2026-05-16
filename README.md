@@ -69,18 +69,23 @@ Keep these three keys somewhere handy. You'll paste them into a file in the next
 
 This is the most common stumbling point: make sure you open the **whole folder**, not a single file.
 
+**In Claude code :**
+1. Launch Claude code (using desktop app, VS Code or Cursor)
+2. Click `File → Open Folder…`
+3. Select the unzipped folder (the one that contains `README.md`, `package.json`, `skills/`, etc.)
+4. Confirm by clicking **Select Folder**
+
 **In Cursor:**
 1. Launch Cursor
 2. Click `File → Open Folder…`
 3. Select the unzipped folder (the one that contains `README.md`, `package.json`, `skills/`, etc.)
 4. Confirm by clicking **Open**
 
-**In VS Code (with Claude Code installed):**
-1. Launch VS Code
+**In Codex:**
+1. Launch Codex
 2. Click `File → Open Folder…`
 3. Select the unzipped folder (the one that contains `README.md`, `package.json`, `skills/`, etc.)
 4. Confirm by clicking **Select Folder**
-5. Open Claude Code from the sidebar or by pressing `Ctrl+Esc` (Windows) / `Cmd+Esc` (Mac)
 
 > ⚠️ **Important:** open the folder *at its root* (the one that contains `README.md`). If you open a parent folder or a sub-folder, the slash commands and skills won't load.
 
@@ -154,7 +159,7 @@ Once setup is done, every step is a single slash command in the AI chat. Just ty
 /find-leads 25 B2B SaaS founders in France
 ```
 
-The AI searches the web and saves a CSV in `outputs/`.
+The AI searches the web and saves a CSV with a targeted lead list in `outputs/`.
 
 ```
 /score-leads
