@@ -48,21 +48,47 @@ If no real, specific signal can be found, leave all 3 columns empty. Lacking inf
 
 Treat every DM as a post-connection note, not a cold pitch. Frame it as research so the prospect doesn't wonder "why is this stranger asking me?".
 
-Here are some examples (not templates) :
+### Core principles
 
-> "Saw your post on [specific topic], the hook was the best thing in my feed this week. Have you thought about [specific improvement related to topic] ?"
+1. **Make it about them.** People don't care how clever you are, they care that you noticed them. Lead with something true about their world, never about you.
+2. **Keep it short.** The shorter the opener, the more weight each word carries. Cut every word that isn't pulling its weight.
+3. **Serve, don't take.** Lead with a genuine observation, a helpful question, or a thoughtful comment. They should think "this person gets it", not "this person wants something".
+4. **One focused question.** Ask exactly one clear question per message so it's effortless to reply. Never stack two or three.
 
-> "Reaching out because you likely run [Founder]'s vendor stack, we build [solution to their problem] for founders in your stage without eating their calendar. Happy to send a sample onboarding plan if useful."
+### How to personalize
 
-> "Noticed [Founder Name]'s [growth lever] is a growth lever for you, we run [service or offer] for [company type] so the in-house team can stay on [more important task]. Worth a 20-min comparison to what you've got now ?"
+Personalization is not dropping their name into a message. It's proving you stepped into their world and actually see them. The deeper you go, the stronger the pull. Anchor on one of these, in rough order of strength:
 
+- **Their activity** — a recent post, comment, or take of theirs. Align with what's clearly on their mind. (Background only, never quote or cite the post in the DM text.)
+- **Their problems** — a challenge they stated outright or one you inferred from their activity. Their challenges are the entry point.
+- **Shared connections or clients** — a mutual contact or client builds trust fast with one line.
+- **Their work** — a specific project, result, or client focus. Show you understand what matters to them, not that you skimmed the profile.
 
-Length: max 2 short sentences.
+### How to ask the question
+
+- **One at a time.** "What's been your biggest focus this week?" beats "How's business? What's challenging? What's your strategy?"
+- **Make it specific.** A focused question proves you were paying attention. "What's been the hardest part of solving [specific problem] so far?" beats "What's the biggest challenge in your business?"
+- **Frame it as curiosity, not prying.** Offer an easy fork: "Was it more about [option 1] or [option 2]?" This steers toward a real insight while staying easy to answer.
+
+### Examples (not templates)
+
+Each one is about them, under two sentences, ends on one specific question, and never pitches:
+
+> "Saw your take on [specific topic], the hook was the best thing in my feed this week. What got you onto [specific angle] in the first place ?"
+
+> "Noticed you've been scaling [specific thing they're working on] lately. Is the harder part right now the [option 1] or the [option 2] ?"
+
+> "Your point about [specific belief they stated] stuck with me. When you ran into [specific problem], was it more of a process thing or a people thing ?"
+
+Length: max 2 short sentences, exactly one question.
 
 ## Hard rules
 
 - Use the prospect's real first name (auto-extracted from the `title` column). No `{{first_name}}` / `[first_name]` placeholders in the output.
-- Never use templates, adapt DMs to every prospect
+- Never use templates, adapt DMs to every prospect.
+- Make it about them, not about you. Lead with something true about their world.
+- Max 2 short sentences per DM. Shorter is better. If it reads like a paragraph, cut it.
+- Exactly one question per DM. Never stack questions.
 - Never invent facts. If no real process or angle shows up in research, leave all 3 columns empty.
 - Never cite a LinkedIn post or article in the DM text. Treat all post/article content as background research only.
 - Never use the em dash character (`—`). Use a comma instead.

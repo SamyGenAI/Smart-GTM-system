@@ -199,17 +199,41 @@ ${brief}
 
 Treat every DM as a post-connection note, not a cold pitch. Frame it as research so the prospect doesn't wonder "why is this stranger asking me?".
 
-Here are some examples (not templates) :
+CORE PRINCIPLES (apply to every DM):
+1. Make it about them. People don't care how clever you are, they care that you noticed them. Lead with something true about their world, never about you.
+2. Keep it short. The shorter the opener, the more weight each word carries. Cut every word that isn't pulling its weight.
+3. Serve, don't take. Lead with a genuine observation, a helpful question, or a thoughtful comment. The prospect should think "this person gets it", not "this person wants something".
+4. One focused question. Ask exactly one clear question per message so it's effortless to reply. Never stack two or three questions.
 
-> "Saw your post on [specific topic], the hook was the best thing in my feed this week. Have you thought about [specific improvement related to topic] ?"
+HOW TO PERSONALIZE (this is the difference between being ignored and starting a conversation):
+Personalization is not dropping their name into a message. It's proving you stepped into their world and actually see them. Anchor on one of these, in rough order of strength:
+- Their activity: a recent post, comment, or take of theirs. Align with what's clearly on their mind. (Use it as background only, never quote or cite the post in the DM text.)
+- Their problems: a challenge they stated outright or one you inferred from their activity. Their challenges are the entry point.
+- Shared connections or clients: a mutual contact or client builds trust fast with one line.
+- Their work: a specific project, result, or client focus. Show you understand what matters to them, not that you skimmed the profile.
 
-> "Reaching out because you likely run [Founder]'s vendor stack, we build [solution to their problem] for founders in your stage without eating their calendar. Happy to send a sample onboarding plan if useful."
+HOW TO ASK THE QUESTION:
+- One at a time. "What's been your biggest focus this week?" beats "How's business? What's challenging? What's your strategy?"
+- Make it specific. A focused question proves you were paying attention. "What's been the hardest part of solving [specific problem] so far?" beats "What's the biggest challenge in your business?"
+- Frame it as genuine curiosity, not prying. Offer them an easy fork: "Was it more about [option 1] or [option 2]?" This steers toward a real insight while staying easy to answer.
 
-> "Noticed [Founder Name]'s [growth lever] is a growth lever for you, we run [service or offer] for [company type] so the in-house team can stay on [more important task]. Worth a 20-min comparison to what you've got now ?"
+Here are some examples (not templates). Notice each one is about them, under two sentences, ends on one specific question, and never pitches:
+
+> "Saw your take on [specific topic], the hook was the best thing in my feed this week. What got you onto [specific angle] in the first place ?"
+
+> "Noticed you've been scaling [specific thing they're working on] lately. Is the harder part right now the [option 1] or the [option 2] ?"
+
+> "Your point about [specific belief they stated] stuck with me. When you ran into [specific problem], was it more of a process thing or a people thing ?"
 
 DM2 takes a different angle from DM1 and gives the prospect something worth their time: a sharp observation about their domain that you want their take on, a contrast or tension you've noticed in their space, or a related angle that opens a new thread. Open directly with the new content, not with a meta line.
 
 DM2 must NEVER contain any of these words or phrases (even softened): "follow-up", "follow up", "following up", "Quick follow-up", "Just following up", "circling back", "bumping this", "to add to my last message", "one more thing". Don't reference the previous DM at all. Just start the new thread.
+
+LENGTH AND STYLE (hard limits):
+- Each DM is at most 2 short sentences. Shorter is better. If it reads like a paragraph, cut it.
+- Exactly one question per DM.
+- Never use the em dash character. Use a comma instead.
+- No buzzwords, no flattery beyond a simple "thanks for connecting", no pitch. Ask, don't sell.
 
 Output format (strict, exact delimiters, no markdown, no commentary):
 <<<OUTREACH>>>
@@ -239,7 +263,9 @@ Lead:
 - ICP score: ${lead.score || ""}
 - ICP-fit reason: ${clip(lead.why_match, 240)}
 
-Find ONE real, specific thing about this person. It can be a recent dated event (raise, hire, launch, talk in the last 60 days), a specific product or methodology they own, an exact phrase from their bio, a stated belief or contrarian take. Anchor the DM on that one thing and ask a question that shows you actually understood it.
+Find ONE real, specific thing about this person. It can be a recent dated event (raise, hire, launch, talk in the last 60 days), a specific product or methodology they own, an exact phrase from their bio, a stated belief or contrarian take. Anchor the DM on that one thing and ask one focused question that shows you actually understood it.
+
+Make it about them, keep each DM to at most 2 short sentences, and ask exactly one question. No em dashes, no pitch.
 
 If nothing real and specific shows up, output NO_SIGNAL.
 
