@@ -97,6 +97,7 @@ function normalize(row) {
     outreach_angle: pick(row, "outreach_angle"),
     dm_sequence_1:  pick(row, "dm_sequence_1"),
     dm_sequence_2:  pick(row, "dm_sequence_2"),
+    evidence:       pick(row, "evidence"),
     source:         pick(row, "source"),
   };
 }
@@ -128,7 +129,7 @@ async function main() {
     "lead_id", "name", "headline", "linkedin_url",
     "score", "tier", "why_match",
     "outreach_angle", "dm_sequence_1", "dm_sequence_2",
-    "source",
+    "evidence", "source",
   ];
 
   const filtered = rows

@@ -229,6 +229,11 @@ DM2 takes a different angle from DM1 and gives the prospect something worth thei
 
 DM2 must NEVER contain any of these words or phrases (even softened): "follow-up", "follow up", "following up", "Quick follow-up", "Just following up", "circling back", "bumping this", "to add to my last message", "one more thing". Don't reference the previous DM at all. Just start the new thread.
 
+TRUTH AND ATTRIBUTION:
+- Never attribute words or beliefs to them ("you wrote/said/posted that...", "your take/point that...", "you mentioned...") unless that exact claim has a real source URL in EVIDENCE. Otherwise rephrase as a neutral observation or drop it.
+- Every fact in a DM (number, launch, methodology, quote, belief) must appear in EVIDENCE with its source. Not in EVIDENCE means not in the DM.
+- Never invent anything. If nothing real and sourced is left, output NO_SIGNAL.
+
 LENGTH AND STYLE (hard limits):
 - Each DM is at most 2 short sentences. Shorter is better. If it reads like a paragraph, cut it.
 - Exactly one question per DM.
@@ -238,6 +243,8 @@ LENGTH AND STYLE (hard limits):
 Output format (strict, exact delimiters, no markdown, no commentary):
 <<<OUTREACH>>>
 <one sentence outreach angle, or NO_SIGNAL>
+<<<EVIDENCE>>>
+<for each concrete fact you used: the fact, then "->", then the source URL or "snippet" if it came from the lead data provided. One per line. If NO_SIGNAL, leave this empty.>
 <<<DM1>>>
 <the first DM, ready to send>
 <<<DM2>>>
@@ -267,9 +274,11 @@ Find ONE real, specific thing about this person. It can be a recent dated event 
 
 Make it about them, keep each DM to at most 2 short sentences, and ask exactly one question. No em dashes, no pitch.
 
+Only attribute a belief or quote to them if it is near-verbatim from a real source. Otherwise frame it as a neutral observation, not as their words. List every concrete fact and its source in the EVIDENCE block.
+
 If nothing real and specific shows up, output NO_SIGNAL.
 
-Output ONLY the four delimiters.`;
+Output ONLY the five delimiters.`;
 }
 
 async function enrichLead(lead, systemPrompt, model, webSearches) {
@@ -307,30 +316,54 @@ async function enrichLead(lead, systemPrompt, model, webSearches) {
   }
 
   const data = await res.json();
-  const textBlocks = Array.isArray(data?.content)
-    ? data.content.filter((c) => c?.type === "text").map((c) => c?.text || "")
-    : [];
-  return textBlocks.join("\n");
+  const content = Array.isArray(data?.content) ? data.content : [];
+
+  const textBlocks = content
+    .filter((c) => c?.type === "text")
+    .map((c) => c?.text || "");
+
+  // Collect the URLs the model actually fetched via web search. These blocks are
+  // returned by the API alongside the text and would otherwise be discarded, leaving
+  // no way to audit whether a DM's claims came from a real source.
+  const searchUrls = [];
+  for (const block of content) {
+    if (block?.type !== "web_search_tool_result") continue;
+    const results = Array.isArray(block.content) ? block.content : [];
+    for (const r of results) {
+      if (r?.url) searchUrls.push(r.url);
+    }
+  }
+
+  return { text: textBlocks.join("\n"), searchUrls };
 }
 
-function parseEnrichment(text) {
+function parseEnrichment(text, searchUrls = []) {
   const safe = String(text || "");
-  const m1 = safe.match(/<<<OUTREACH>>>([\s\S]*?)<<<DM1>>>/);
-  const m2 = safe.match(/<<<DM1>>>([\s\S]*?)<<<DM2>>>/);
-  const m3 = safe.match(/<<<DM2>>>([\s\S]*?)<<<END>>>/);
+  const mOut = safe.match(/<<<OUTREACH>>>([\s\S]*?)<<<EVIDENCE>>>/);
+  const mEvid = safe.match(/<<<EVIDENCE>>>([\s\S]*?)<<<DM1>>>/);
+  const mDm1 = safe.match(/<<<DM1>>>([\s\S]*?)<<<DM2>>>/);
+  const mDm2 = safe.match(/<<<DM2>>>([\s\S]*?)<<<END>>>/);
 
-  const outreach = (m1?.[1] || "").trim();
-  const dm1 = (m2?.[1] || "").trim();
-  const dm2 = (m3?.[1] || "").trim();
+  const outreach = (mOut?.[1] || "").trim();
+  const evidence = (mEvid?.[1] || "").trim();
+  const dm1 = (mDm1?.[1] || "").trim();
+  const dm2 = (mDm2?.[1] || "").trim();
 
   if (!outreach || /^NO_SIGNAL$/i.test(outreach)) {
-    return { outreach_angle: "", dm_sequence_1: "", dm_sequence_2: "" };
+    return { outreach_angle: "", dm_sequence_1: "", dm_sequence_2: "", evidence: "" };
   }
+
+  // Append the actual fetched URLs so the evidence column always shows what the model
+  // searched, even if it forgot to cite a URL in its own EVIDENCE block.
+  const uniqueUrls = [...new Set(searchUrls)];
+  const sources = uniqueUrls.length ? `Searched: ${uniqueUrls.join(" | ")}` : "";
+  const evidenceCombined = [evidence, sources].filter(Boolean).join("\n");
 
   return {
     outreach_angle: outreach,
     dm_sequence_1: dm1,
     dm_sequence_2: dm2,
+    evidence: evidenceCombined,
   };
 }
 
@@ -385,8 +418,8 @@ async function main() {
   for (const lead of target) {
     const url = String(lead.url ?? "").trim();
     try {
-      const raw = await enrichLead(lead, systemPrompt, args.model, args.webSearches);
-      const parsed = parseEnrichment(raw);
+      const { text, searchUrls } = await enrichLead(lead, systemPrompt, args.model, args.webSearches);
+      const parsed = parseEnrichment(text, searchUrls);
       enrichmentByUrl.set(url, parsed);
       if (!parsed.outreach_angle) skipped += 1;
       processed += 1;
@@ -395,14 +428,14 @@ async function main() {
       );
     } catch (err) {
       process.stderr.write(`[${processed + 1}/${target.length}] error :: ${err.message}\n`);
-      enrichmentByUrl.set(url, { outreach_angle: "", dm_sequence_1: "", dm_sequence_2: "" });
+      enrichmentByUrl.set(url, { outreach_angle: "", dm_sequence_1: "", dm_sequence_2: "", evidence: "" });
       processed += 1;
     }
     if (args.sleepMs > 0) await sleep(args.sleepMs);
   }
 
   const inputHeaders = Object.keys(allLeads[0]);
-  const newCols = ["outreach_angle", "dm_sequence_1", "dm_sequence_2"];
+  const newCols = ["outreach_angle", "dm_sequence_1", "dm_sequence_2", "evidence"];
   const outputHeaders = [...inputHeaders];
   for (const col of newCols) {
     if (!outputHeaders.includes(col)) outputHeaders.push(col);
@@ -410,7 +443,7 @@ async function main() {
 
   const outputRows = allLeads.map((lead) => {
     const url = String(lead.url ?? "").trim();
-    const enrich = enrichmentByUrl.get(url) ?? { outreach_angle: "", dm_sequence_1: "", dm_sequence_2: "" };
+    const enrich = enrichmentByUrl.get(url) ?? { outreach_angle: "", dm_sequence_1: "", dm_sequence_2: "", evidence: "" };
     const row = { ...lead, ...enrich };
     return outputHeaders.map((h) => csvEscape(row[h] ?? "")).join(",");
   });

@@ -36,13 +36,16 @@ Also required: `context/brief/brief.md`. Hard cap: 1500 chars sent to the model.
 
 ## Output (strict, CSV-only)
 
-Append exactly 3 new columns to the input CSV:
+Append exactly 4 new columns to the input CSV:
 
 1. `outreach_angle` — one sentence describing the specific real thing you're anchoring on.
 2. `dm_sequence_1` — first DM, ready to send.
 3. `dm_sequence_2` — follow-up DM, ready to send.
+4. `evidence` — audit trail: each concrete fact used and its source, plus a `Searched:` line listing every URL the model actually fetched via web search. Review this to confirm nothing was fabricated and that quotes attributed to the prospect are real. The export keeps this column.
 
-If no real, specific signal can be found, leave all 3 columns empty. Lacking information is better than fabricating it.
+If no real, specific signal can be found, leave the first 3 columns empty. Lacking information is better than fabricating it.
+
+**Attribution rule:** the model only states something as the prospect's own words ("your point that...", "your take that...") if it is a near-verbatim quote from a real source. Paraphrases and inferences are framed as neutral observations instead. When reviewing, cross-check any attributed quote against the URLs in the `evidence` column.
 
 ## What makes a good DM
 
