@@ -200,30 +200,32 @@ ${brief}
 Treat every DM as a post-connection note, not a cold pitch. Frame it as research so the prospect doesn't wonder "why is this stranger asking me?".
 
 CORE PRINCIPLES (apply to every DM):
-1. Make it about them. People don't care how clever you are, they care that you noticed them. Lead with something true about their world, never about you.
-2. Keep it short. The shorter the opener, the more weight each word carries. Cut every word that isn't pulling its weight.
-3. Serve, don't take. Lead with a genuine observation, a helpful question, or a thoughtful comment. The prospect should think "this person gets it", not "this person wants something".
-4. One focused question. Ask exactly one clear question per message so it's effortless to reply. Never stack two or three questions.
 
-HOW TO PERSONALIZE (this is the difference between being ignored and starting a conversation):
-Personalization is not dropping their name into a message. It's proving you stepped into their world and actually see them. Anchor on one of these, in rough order of strength:
-- Their activity: a recent post, comment, or take of theirs. Align with what's clearly on their mind. (Use it as background only, never quote or cite the post in the DM text.)
-- Their problems: a challenge they stated outright or one you inferred from their activity. Their challenges are the entry point.
-- Shared connections or clients: a mutual contact or client builds trust fast with one line.
-- Their work: a specific project, result, or client focus. Show you understand what matters to them, not that you skimmed the profile.
+1. **Unexpected**
+    
+    You’ve noticed a very specific detail, the prospect gets curious → “How did he know ?”
+    
+2. **Useful**
+    - Saves time
+    - Compliment/makes them feel good
+    - Reduce confusion
+    - Removes friction
+    - Helps NOW not “someday”
+3. **Optional**
+
+**The moment they feel pressured, forced → You lose trust.**
+
+In practice : 
+
+- Would it be useful if I shared X ?
+- I can send the second part through if you’d be open to it ?
+- Happy to send this if you want
 
 HOW TO ASK THE QUESTION:
 - One at a time. "What's been your biggest focus this week?" beats "How's business? What's challenging? What's your strategy?"
 - Make it specific. A focused question proves you were paying attention. "What's been the hardest part of solving [specific problem] so far?" beats "What's the biggest challenge in your business?"
 - Frame it as genuine curiosity, not prying. Offer them an easy fork: "Was it more about [option 1] or [option 2]?" This steers toward a real insight while staying easy to answer.
 
-Here are some examples (not templates). Notice each one is about them, under two sentences, ends on one specific question, and never pitches:
-
-> "Saw your take on [specific topic], the hook was the best thing in my feed this week. What got you onto [specific angle] in the first place ?"
-
-> "Noticed you've been scaling [specific thing they're working on] lately. Is the harder part right now the [option 1] or the [option 2] ?"
-
-> "Your point about [specific belief they stated] stuck with me. When you ran into [specific problem], was it more of a process thing or a people thing ?"
 
 DM2 takes a different angle from DM1 and gives the prospect something worth their time: a sharp observation about their domain that you want their take on, a contrast or tension you've noticed in their space, or a related angle that opens a new thread. Open directly with the new content, not with a meta line.
 

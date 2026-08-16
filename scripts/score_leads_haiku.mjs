@@ -179,11 +179,13 @@ function normalizeRow(row) {
 
 const ICP_SCORING_RUBRIC = `
 Target profile:
-- B2B founder/agency owner
-- Europe or US
+- Founder/agency owner/Director/Co-founder/Head of Sales/Growth/GTM
+- Europe, US, NZ, AU
 - Team size ideally 1-30 (up to 50 acceptable)
 - Signals of LinkedIn activity and growth intent
-- Not direct competitor content/design agencies (penalize if obvious)
+- Headline looks professional : no buzzwords, clear social proof and / or title.
+- Not an AI related business.
+
 
 Scoring guidance:
 - 80-100: strong ICP fit with clear B2B founder + likely region + relevant offer

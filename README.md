@@ -18,6 +18,7 @@ When you set it up, the AI reads your **LinkedIn profile** and **business websit
 | **Capture warm leads** | Pull everyone who reacted to *any* LinkedIn post (yours, a competitor's, an industry leader's, an influencer's) | Turn other people's audiences into your prospect list |
 | **Enrich** | The AI researches each prospect online and writes two LinkedIn DMs personalized to *both* their context and your offer | Outreach that sounds human, at scale, without a copywriter |
 | **Export** | One clean CSV with name, LinkedIn URL, score, and DMs | Plug straight into your CRM, Notion, or outreach tool |
+| **Watch signals** | Track a watchlist of competitors and target companies, and report what they post and what they do (hiring, funding, launches, job changes) | Know when an account is heating up, and reach out on timing instead of guesswork |
 
 
 ---
@@ -33,6 +34,14 @@ Node is what runs the scripts under the hood. You will not interact with it dire
 - Download the **LTS** version from [nodejs.org](https://nodejs.org/)
 - Run the installer and click **Next** through every screen
 - That's it
+
+### 1b. Install Python (only for the signal commands)
+
+Python runs the `/social-listening` and `/intent-signals` scripts. Skip this if you only use the lead pipeline.
+
+- Download from [python.org/downloads](https://www.python.org/downloads/)
+- **On Windows, tick "Add python.exe to PATH" on the first installer screen** — this is easy to miss and the scripts will not run without it
+- macOS already has Python; nothing to do
 
 ### 2. Install your AI editor
 
@@ -203,6 +212,40 @@ Then run the same `/score-leads` → `/enrich-leads` → `/export-leads` chain.
 | `/post-engagers` | Pulls people who reacted to LinkedIn posts (yours or anyone's) |
 | `/enrich-leads` | Researches tier 1 / 2 leads and writes two personalized DMs each |
 | `/export-leads` | Produces the final clean CSV ready for your CRM |
+| `/social-listening` | Reports what the competitors and people on your watchlist are posting |
+| `/intent-signals` | Reports buying signals from your watchlist: hiring, funding, launches, job changes |
+
+---
+
+## Watching signals
+
+The two signal commands answer a different question from the lead pipeline: not *who should I contact*, but *what changed this week among the people I already care about*.
+
+**One-time setup.** Copy `context/signals/watchlist-template.md` to `context/signals/watchlist.md` and list who you want to track. One line each, grouped by platform:
+
+```
+## LinkedIn
+
+Jane Doe: https://linkedin.com/in/janedoe
+Acme Corp: https://linkedin.com/company/acme
+
+## Reddit
+
+r/sales
+```
+
+Delete the sections you don't use. That's the whole format.
+
+**Optional.** Copy `context/signals/signals-template.md` to `context/signals/signals.md` to tell the AI which topics matter, what to ignore, and how to rank what comes back. Skip it and the AI uses its own judgement.
+
+**Then run either command.** The AI asks which sources to check before it runs anything (it never runs them all by default — that wastes time and API quota), then reports what it found directly in the chat. No CSV, no file to open.
+
+| Command | Answers |
+|---------|---------|
+| `/social-listening` | What are they **saying and publishing**? |
+| `/intent-signals` | What are they **doing** that suggests they're ready to buy? |
+
+Sources are added one at a time. A source that isn't built yet is listed as ⬜ in the skill file, and the AI will tell you plainly rather than inventing a result. Only the `demo` source ships working today — it returns clearly-labelled `[DEMO]` placeholder data so you can see the flow before connecting a real platform.
 
 ---
 
@@ -239,6 +282,10 @@ Every export produces a CSV with these columns:
 **DMs say `NO_SIGNAL`**: the AI couldn't find specific public information about that prospect. Either widen the search or skip that lead. Leaving the DM blank is better than fabricating one.
 
 **LinkedIn profile pull fails during setup**: the `RAPIDAPI_KEY` is optional. Setup will skip that step and use your answers + website only. You can always re-run `/setup` later once the key is added.
+
+**"python is not recognized" on the signal commands**: Python isn't installed, or it was installed without being added to PATH. Reinstall from [python.org](https://www.python.org/downloads/) and tick **"Add python.exe to PATH"** on the first screen.
+
+**Signal commands say "nothing watched"**: you haven't created `context/signals/watchlist.md` yet, or the section for that platform is empty. Copy `context/signals/watchlist-template.md` and add one line per entity under the right heading.
 
 ---
 

@@ -19,6 +19,7 @@ Core offer: [e.g. premium content + qualified founder conversations]
 - **Claude Haiku**: lead scoring and qualification
 - **Claude Haiku**: deep prospect enrichment (with web search)
 - **RapidAPI (`linkedin-api8`)**: setup profile extraction and post-engagers extraction
+- **Python (stdlib only)**: signal watching scripts in `scripts/signals/`
 
 ## Workflow
 
@@ -31,6 +32,10 @@ Core offer: [e.g. premium content + qualified founder conversations]
 
 Warm source path:
 RapidAPI post engagers -> skills/post-engagers -> skills/score-leads
+
+Signal watching path (runs on its own, reports in chat):
+context/signals/watchlist.md -> skills/social-listening
+context/signals/watchlist.md -> skills/intent-signals
 ```
 
 ## Quick Commands
@@ -47,7 +52,29 @@ Read skills/post-engagers/SKILL.md and pull engagers from my last 10 posts
 Read skills/enrich-leads/SKILL.md and enrich tier1/tier2 leads with Haiku web research
 
 Read skills/export-leads/SKILL.md and export outputs/[date]-[campaign]-leads.csv
+
+Read skills/social-listening/SKILL.md and check what my watchlist has been posting this week
+
+Read skills/intent-signals/SKILL.md and check buying signals for my watchlist
 ```
+
+## Signals
+
+Two separate context files, copied from their `-template.md` siblings:
+
+- `context/signals/watchlist.md` — WHO to watch. One line per entity,
+  `Name: handle`, grouped by platform. Reddit is just `r/subreddit`.
+  Read directly by the scripts.
+- `context/signals/signals.md` — WHAT counts as a signal and how to rank it.
+  Read by the skills, not the scripts. Optional but sharpens results.
+
+Sources are standalone Python scripts in `scripts/signals/listening/` and
+`scripts/signals/intent/`, added one at a time. Each is self-contained —
+stdlib only, no shared module, no local imports. Copy `demo.py` to add one.
+
+Both skills ALWAYS ask which sources to run before running anything. They
+never run every source by default, and they report conversationally in chat
+rather than writing a CSV.
 
 ## Current Priorities
 
