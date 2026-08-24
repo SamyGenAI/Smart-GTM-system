@@ -68,9 +68,10 @@ Two separate context files, copied from their `-template.md` siblings:
 - `context/signals/signals.md` — WHAT counts as a signal and how to rank it.
   Read by the skills, not the scripts. Optional but sharpens results.
 
-Sources are standalone Python scripts in `scripts/signals/listening/` and
-`scripts/signals/intent/`, added one at a time. Each is self-contained —
-stdlib only, no shared module, no local imports. Copy `demo.py` to add one.
+Listening runs from one script, `scripts/signals/social-listening.py`,
+with `--source linkedin` (Apify, bills per post) or `--source x` (xAI Grok
+`x_search`, one call per run). Both return real engagement counts and sort by
+them. Intent sources live in `scripts/signals/intent/`.
 
 Both skills ALWAYS ask which sources to run before running anything. They
 never run every source by default, and they report conversationally in chat
