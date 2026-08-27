@@ -29,13 +29,26 @@ WATCHLIST = os.path.join("context", "signals", "watchlist.md")
 TIMEOUT = 600  # server-side search runs ~2min; actor runs can be slower
 
 X_POST_URL = re.compile(
-    r"^https?://(?:www\.)?(?:x|twitter)\.com/[A-Za-z0-9_]{1,15}/status/\d+", re.I)
+    r"^https?://(?:www\.)?(?:x|twitter)\.com/[A-Za-z0-9_]{1,15}/(?:status|article)/\d+", re.I)
+
+# An /article/ permalink IS an X article -- the URL is the fact, so it decides,
+# not the model's self-reported post_type. Threads have ordinary /status/ URLs
+# and can only be taken from the label.
+X_ARTICLE_URL = re.compile(
+    r"^https?://(?:www\.)?(?:x|twitter)\.com/[A-Za-z0-9_]{1,15}/article/\d+", re.I)
+
+
+# Long-form ranks above short posts so substance leads over volume.
+def x_is_longform(url, post_type):
+    return bool(X_ARTICLE_URL.match(url or "")) or (post_type or "").lower() == "thread"
 
 X_CONTRACT = """Return ONLY a JSON object of this exact shape:
 {"posts":[{"entity":"watchlist name, or the handle when researching a topic",
 "author":"display name","handle":"bare handle, no @","text":"full post text",
 "url":"https://x.com/<handle>/status/<id>" or "https://x.com/<handle>/article/<id>","date":"ISO 8601",
-"likes":0,"reposts":0,"replies":0,"post_type":"post|reply|quote|thread"}]}
+"likes":0,"reposts":0,"replies":0,"post_type":"article|thread|post|reply|quote"}]}
+Use "article" only for a real X article (an /article/ permalink), and "thread"
+for a multi-post thread. Do not label a single short post as either.
 likes/reposts/replies must be integers, or null when genuinely unknown.
 Empty posts array if nothing relevant. No other keys, no markdown fences."""
 
@@ -45,7 +58,10 @@ X_INSTRUCTIONS = (
     "Every post needs its real permalink: https://x.com/<handle>/status/<id> or https://x.com/<handle>/article/<id>  "
     "Report engagement counts as the search returned them; use null when a count "
     "is genuinely unknown, never 0 for unknown. Prefer substantive posts over "
-    "pure retweets, one-word replies and giveaways. Return the JSON object only."
+    "pure retweets, one-word replies and giveaways. Favour long-form: include "
+    "every relevant X article and multi-post thread you find, even when its "
+    "engagement is lower than a short post's. Never invent an article to fill "
+    "the quota -- if there are none, return posts. Return the JSON object only."
 )
 
 
@@ -296,7 +312,11 @@ def run_x(args, entries):
     since = today - timedelta(days=args.days)
     prompt = (f"{task}\n\nOnly posts from the last {args.days} days "
               f"(on or after {since.isoformat()}).\n\n"
-              f"Return at most {args.limit} posts, highest-engagement first.\n\n{X_CONTRACT}")
+              "Prioritise X articles and long-form threads: search for them "
+              "first and include all you find, then fill the rest with the "
+              "highest-engagement regular posts.\n\n"
+              f"Return at most {args.limit} items, articles and threads first, "
+              f"each group highest-engagement first.\n\n{X_CONTRACT}")
 
     tool = {"type": "x_search", "from_date": since.isoformat(),
             "to_date": today.isoformat()}
@@ -338,7 +358,8 @@ def run_x(args, entries):
             continue
         handle = (post.get("handle") or "").strip().lstrip("@")
         if not handle:
-            found = re.search(r"(?:x|twitter)\.com/([A-Za-z0-9_]{1,15})/status/", url, re.I)
+            found = re.search(r"(?:x|twitter)\.com/([A-Za-z0-9_]{1,15})/(?:status|article)/",
+                              url, re.I)
             handle = found.group(1) if found else ""
         likes = as_count(post.get("likes"))
         reposts = as_count(post.get("reposts"))
@@ -356,14 +377,23 @@ def run_x(args, entries):
             "reposts": reposts,
             "replies": replies,
             "engagement": sum(known) if known else None,
-            "post_type": post.get("post_type"),
+            # The URL wins over the model's label: an /article/ permalink is an
+            # article whatever it called itself.
+            "post_type": ("article" if X_ARTICLE_URL.match(url)
+                          else post.get("post_type")),
         })
     if dropped:
         sys.stderr.write(f"dropped {dropped} record(s) with no valid permalink.\n")
-    sys.stderr.write(f"{len(signals)} post(s) returned.\n")
+    articles = sum(1 for s in signals if X_ARTICLE_URL.match(s["url"]))
+    longform = sum(1 for s in signals if x_is_longform(s["url"], s["post_type"]))
+    sys.stderr.write(f"{len(signals)} item(s) returned "
+                     f"({articles} article, {longform - articles} thread, "
+                     f"{len(signals) - longform} post).\n")
 
-    # Re-sorted rather than trusting the model's ordering. Unknown sorts last.
-    signals.sort(key=lambda s: (s["engagement"] is not None, s["engagement"] or 0),
+    # Re-sorted rather than trusting the model's ordering. Long-form first, then
+    # engagement within each group. Unknown engagement sorts last.
+    signals.sort(key=lambda s: (x_is_longform(s["url"], s["post_type"]),
+                                s["engagement"] is not None, s["engagement"] or 0),
                  reverse=True)
     emit("x", signals[:args.limit])
 
