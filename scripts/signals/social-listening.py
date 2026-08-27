@@ -1,22 +1,9 @@
-"""Social listening: pull recent posts from the accounts in the watchlist.
+"""Social listening: recent posts from the watchlist, sorted by engagement.
 
-Reads context/signals/watchlist.md. Two sources, pick with --source:
+--source linkedin  Apify actor, bills per post scraped.
+--source x         xAI Grok x_search, one call per run; -q for topic research.
 
-    linkedin  Apify actor `supreme_coder/linkedin-post`. Bills per post.
-    x         xAI Grok `x_search`. One API call per run, so -n is ~free.
-              Also does free-text topic research via -q, no watchlist needed.
-
-Prints JSON to stdout for the agent, signals sorted by engagement.
-
-Usage:
-    python scripts/signals/social-listening.py --source linkedin -d 7 -n 25
-    python scripts/signals/social-listening.py --source x -d 7 -n 25
-    python scripts/signals/social-listening.py --source x -q "AI ghostwriting pricing"
-    python scripts/signals/social-listening.py --source x --dry-run
-
-Cost: LinkedIn bills per post -- one run scrapes at most
-(watchlist lines) x --per-source, and -d filters after fetching, so lower
---per-source to spend less. X bills per request, not per post. --dry-run is free.
+Prints JSON to stdout. Run from the repo root.
 """
 
 import argparse
@@ -47,23 +34,23 @@ X_POST_URL = re.compile(
 X_CONTRACT = """Return ONLY a JSON object of this exact shape:
 {"posts":[{"entity":"watchlist name, or the handle when researching a topic",
 "author":"display name","handle":"bare handle, no @","text":"full post text",
-"url":"https://x.com/<handle>/status/<id>","date":"ISO 8601",
+"url":"https://x.com/<handle>/status/<id>" or "https://x.com/<handle>/article/<id>","date":"ISO 8601",
 "likes":0,"reposts":0,"replies":0,"post_type":"post|reply|quote|thread"}]}
 likes/reposts/replies must be integers, or null when genuinely unknown.
 Empty posts array if nothing relevant. No other keys, no markdown fences."""
 
 X_INSTRUCTIONS = (
-    "You are a B2B go-to-market social listening analyst. Report ONLY posts you "
+    "You are a social listening analyst. Report ONLY posts and articles you "
     "actually found via x_search. Never invent a post, URL, author, or count. "
-    "Every post needs its real permalink: https://x.com/<handle>/status/<id>. "
+    "Every post needs its real permalink: https://x.com/<handle>/status/<id> or https://x.com/<handle>/article/<id>  "
     "Report engagement counts as the search returned them; use null when a count "
     "is genuinely unknown, never 0 for unknown. Prefer substantive posts over "
     "pure retweets, one-word replies and giveaways. Return the JSON object only."
 )
 
 
+# Loads API keys from .env. Real env vars win.
 def load_env():
-    """Parse .env from the repo root into os.environ. Real env vars win."""
     if not os.path.exists(".env"):
         return
     with open(".env", encoding="utf-8") as fh:
@@ -73,12 +60,9 @@ def load_env():
                 os.environ[key.strip()] = value.strip().strip("\"'")
 
 
+# Reads WHO to watch from one '## <section>' of watchlist.md -> [{name, handle}].
+# Lines starting > - * # are notes, skipped: on LinkedIn every entry costs credits.
 def read_watchlist(section):
-    """Return [{name, handle}] from the '## <section>' heading.
-
-    Lines are `Name: handle-or-url`. Notes must start with > - * or # so they
-    are never sent to an API -- on LinkedIn every accepted line costs credits.
-    """
     if not os.path.exists(WATCHLIST):
         raise SystemExit(f"Missing {WATCHLIST}. Copy watchlist-template.md to it.")
 
@@ -101,12 +85,14 @@ def read_watchlist(section):
     return entries
 
 
+# Prints the result as JSON on stdout -- this is what the agent reads.
 def emit(source, signals, extra=None):
     payload = {"source": source, "count": len(signals), "signals": signals}
     payload.update(extra or {})
     print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
+# Shared POST helper for both the Apify and xAI calls.
 def post_json(url, body, headers):
     request = urllib.request.Request(url, data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json",
@@ -118,12 +104,9 @@ def post_json(url, body, headers):
 # --- LinkedIn ----------------------------------------------------------------
 
 
+# Watchlist line -> LinkedIn URL, or None. Rejecting matters: each accepted
+# line is billed for up to --per-source posts.
 def linkedin_url(handle):
-    """Coerce a watchlist line to a LinkedIn URL, or None to drop it.
-
-    Dropping matters here: every accepted line is billed for up to
-    --per-source posts, so prose left in the section must not reach the actor.
-    """
     if handle.startswith(("http://", "https://", "linkedin.com", "www.linkedin.com")):
         url = handle if "//" in handle else "https://" + handle.lstrip("/")
         return url if "linkedin.com/" in url.lower() else None
@@ -132,15 +115,10 @@ def linkedin_url(handle):
     return None
 
 
+# Scrapes one profile. This is the step that bills. [] on failure so others run.
+# Traps: batching URLs into one run silently drops some while billing for all.
+# Setting numLikes/numComments to 0 returns an empty dataset -- omit them.
 def call_actor(url, per_source, token):
-    """Run the actor for ONE url. Returns [] on failure so others still run.
-
-    One URL per run on purpose: a batched run silently returns posts for only
-    some URLs while billing for all of them.
-
-    numLikes/numComments are omitted from the payload rather than set to 0 --
-    passing 0 makes this actor return an empty dataset (verified live).
-    """
     try:
         return post_json(f"{ACTOR_URL}?token={token}",
                          {"urls": [url], "limitPerSource": per_source}, {})
@@ -155,8 +133,8 @@ def call_actor(url, per_source, token):
     return []
 
 
+# Post within the -d window? Undated posts are kept.
 def in_window(iso, days):
-    """True if the post is recent enough. Undated posts are kept."""
     if not iso:
         return True
     try:
@@ -166,6 +144,7 @@ def in_window(iso, days):
     return posted >= datetime.now(timezone.utc) - timedelta(days=days)
 
 
+# Full LinkedIn run: resolve URLs, scrape each, sort by engagement, print.
 def run_linkedin(args, entries):
     for entry in entries:
         entry["url"] = linkedin_url(entry["handle"])
@@ -215,8 +194,8 @@ def run_linkedin(args, entries):
                 "post_type": item.get("type"),
             })
             kept += 1
-        # A silent profile is this source's main failure mode -- say so, or a
-        # broken scrape reads as a quiet competitor.
+        # A silent profile is the main failure mode -- unreported, a broken
+        # scrape reads as a quiet competitor.
         if not items:
             sys.stderr.write(f"{entry['name']}: no posts returned (unreachable or inactive)\n")
         elif not kept:
@@ -231,8 +210,8 @@ def run_linkedin(args, entries):
 # --- X -----------------------------------------------------------------------
 
 
+# Watchlist line -> bare X handle, or None.
 def x_handle(raw):
-    """Reduce a watchlist line to a bare X handle, or None if it is not one."""
     match = re.search(r"(?:^|//|\.)(?:x|twitter)\.com/@?([A-Za-z0-9_]{1,15})", raw, re.I)
     if match:
         reserved = {"search", "home", "i", "explore", "hashtag", "intent", "share"}
@@ -243,12 +222,9 @@ def x_handle(raw):
     return raw if re.fullmatch(r"[A-Za-z0-9_]{1,15}", raw) else None
 
 
+# Metric -> int ("1.2K" -> 1200), or None if unknown. None not 0: 0 would
+# claim the post flopped, which is a different claim from not knowing.
 def as_count(value):
-    """Coerce a reported metric to int, or None when genuinely unknown.
-
-    None is deliberate: 0 would assert a post flopped, which is a different
-    claim from not knowing. Unknowns sort last.
-    """
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, (int, float)):
@@ -262,12 +238,9 @@ def as_count(value):
     return None
 
 
+# Pulls the model's answer out of xAI's envelope. The output array interleaves
+# tool calls with the message, so it can't be read positionally.
 def x_text(response):
-    """Pull the assistant message out of the /v1/responses envelope.
-
-    The output array interleaves tool calls with the message, so the message
-    has to be picked out rather than read positionally.
-    """
     if isinstance(response.get("output_text"), str) and response["output_text"].strip():
         return response["output_text"]
     chunks = []
@@ -284,6 +257,7 @@ def x_text(response):
     return "\n".join(chunks)
 
 
+# Full X run: build the search, call xAI, validate posts, sort, print.
 def run_x(args, entries):
     resolved = []
     for entry in entries:
@@ -358,8 +332,7 @@ def run_x(args, entries):
     signals, dropped = [], 0
     for post in posts:
         url = (post.get("url") or "").strip() if isinstance(post, dict) else ""
-        # No usable permalink is the clearest tell the model produced something
-        # it did not actually find.
+        # No usable permalink = the model likely invented the post.
         if not X_POST_URL.match(url):
             dropped += 1
             continue
@@ -389,13 +362,13 @@ def run_x(args, entries):
         sys.stderr.write(f"dropped {dropped} record(s) with no valid permalink.\n")
     sys.stderr.write(f"{len(signals)} post(s) returned.\n")
 
-    # Re-sorted here rather than trusting the model's ordering. Unknown
-    # engagement sorts last -- unknown is not the same as zero.
+    # Re-sorted rather than trusting the model's ordering. Unknown sorts last.
     signals.sort(key=lambda s: (s["engagement"] is not None, s["engagement"] or 0),
                  reverse=True)
     emit("x", signals[:args.limit])
 
 
+# Parses flags and hands off to the chosen source.
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--source", choices=("linkedin", "x"), required=True)
