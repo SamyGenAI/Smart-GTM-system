@@ -1,8 +1,9 @@
-"""Social listening: recent posts from the watchlist, sorted by engagement.
+"""Social listening: recent posts from the watchlist, ranked (YouTube by date).
 
 --source linkedin  Apify actor, bills per post scraped.
 --source x         xAI Grok x_search, one call per run; -q for topic research.
 --source reddit    keyless RSS + arctic-shift + shreddit; free, no API key.
+--source youtube   yt-dlp; free, no API key. Transcripts + comments, newest first.
 
 Prints JSON to stdout. Run from the repo root.
 """
@@ -12,7 +13,10 @@ import html
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -852,17 +856,433 @@ def run_reddit(args, entries):
     emit("reddit", posts)
 
 
+# --- YouTube ------------------------------------------------------------------
+#
+# Keyless and free, one dependency: yt-dlp. Nothing here bills.
+#
+# Ranking is by DATE, not views. On the other sources engagement is the sort
+# key; here a two-year-old video with 500k views is not a signal and this week's
+# 400-view upload from a competitor is. Views are still reported, and only break
+# ties between videos sharing a publish date.
+#
+# Three yt-dlp shapes, because no single one returns everything:
+#   1. discovery  ytsearchN: / <channel>/videos  -> ids (flat: fast, but DATELESS)
+#   2. hydrate    --dump-json on the ids         -> real dates + counts, batched
+#   3. enrich     --write-auto-subs / --write-comments -> transcript + comments
+# Flat discovery is the only affordable way to scan a channel, and it carries no
+# upload date at all, so (2) is not an optimisation -- without it every video
+# would sort as undated and the date ranking would be a lie.
+
+YT_SEARCH_URL = "ytsearch{n}:{query}"
+YT_WATCH_URL = "https://www.youtube.com/watch?v={vid}"
+# yt-dlp is slow by nature (each call negotiates with YouTube), and these are
+# generous rather than tight: a killed call loses the whole batch it was fetching.
+YT_DISCOVER_TIMEOUT = 180
+YT_HYDRATE_TIMEOUT = 300
+YT_TRANSCRIPT_TIMEOUT = 120
+YT_COMMENTS_TIMEOUT = 180
+YT_HYDRATE_BATCH = 12    # ids per --dump-json call
+MAX_YT_COMMENTS = 8      # top comments kept per enriched video
+TRANSCRIPT_MAX_WORDS = 4000
+# Asking for several languages in one call makes yt-dlp fetch them serially and
+# YouTube 429s the extras -- observed live: `en` landed, `fr` came back 429 and
+# the call exited non-zero with a perfectly good transcript already on disk.
+# So a non-zero exit is never trusted over the file that is actually on disk.
+YT_SUB_LANGS = "en.*,fr.*"
+
+# Live/upcoming streams have no real publish date and no transcript; they are
+# not signals yet.
+YT_SKIP_LIVE = ("is_live", "is_upcoming")
+
+_VTT_TIMING = re.compile(r"^\d{2}:\d{2}:\d{2}\.\d{3}\s*-->.*$", re.MULTILINE)
+_VTT_INLINE = re.compile(r"<[^>]+>")
+_VTT_CUEHEAD = re.compile(r"^(WEBVTT|Kind:|Language:|NOTE\b).*$", re.MULTILINE)
+_YT_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+# yt-dlp may be a real binary or only a python module; both are used the same way.
+def ytdlp_base():
+    if shutil.which("yt-dlp"):
+        return ["yt-dlp"]
+    try:
+        subprocess.run([sys.executable, "-m", "yt_dlp", "--version"],
+                       capture_output=True, timeout=60, check=True)
+        return [sys.executable, "-m", "yt_dlp"]
+    except Exception:
+        return None
+
+
+# Runs yt-dlp and returns (stdout, ok). Never raises: one dead video must not
+# sink the run. ok is False only when the process itself failed -- callers that
+# can salvage a partial result ignore it (see the 429 note above).
+def run_ytdlp(args, timeout):
+    base = ytdlp_base()
+    if not base:
+        return "", False
+    try:
+        done = subprocess.run(base + ["--ignore-config", "--no-warnings"] + args,
+                              capture_output=True, timeout=timeout,
+                              encoding="utf-8", errors="replace")
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(f"yt-dlp timed out after {timeout}s\n")
+        return "", False
+    except Exception as err:
+        sys.stderr.write(f"yt-dlp failed :: {err}\n")
+        return "", False
+    if done.returncode != 0:
+        tail = (done.stderr or "").strip().splitlines()
+        if tail:
+            sys.stderr.write(f"yt-dlp :: {tail[-1][:180]}\n")
+    return done.stdout or "", done.returncode == 0
+
+
+# JSON-per-line stdout -> dicts, skipping the noise yt-dlp interleaves.
+def parse_json_lines(raw):
+    rows = []
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+# Watchlist line -> a /videos URL, or None. Accepts @handle, channel URL, or a
+# bare handle.
+def youtube_target(handle):
+    raw = handle.strip().rstrip("/")
+    if raw.startswith(("http://", "https://", "youtube.com", "www.youtube.com")):
+        url = raw if "//" in raw else "https://" + raw.lstrip("/")
+        if "youtube.com/" not in url.lower() and "youtu.be/" not in url.lower():
+            return None
+        # A bare channel URL defaults to the Home tab, which is a curated
+        # shelf, not a feed -- ask for /videos explicitly so we get uploads.
+        if re.search(r"/(videos|shorts|streams|playlists)$", url, re.I):
+            return url
+        if re.search(r"youtube\.com/(@[^/]+|c/[^/]+|channel/[^/]+|user/[^/]+)$", url, re.I):
+            return url + "/videos"
+        return url
+    if re.fullmatch(r"@?[A-Za-z0-9_.-]{3,100}", raw):
+        return f"https://www.youtube.com/@{raw.lstrip('@')}/videos"
+    return None
+
+
+# yt-dlp's `timestamp` is exact when present; upload_date is date-only, so it is
+# the fallback rather than the first choice.
+def youtube_date(video):
+    stamp = video.get("timestamp")
+    if isinstance(stamp, (int, float)) and stamp > 0:
+        return datetime.fromtimestamp(stamp, timezone.utc).isoformat()
+    raw = str(video.get("upload_date") or "")
+    if re.fullmatch(r"\d{8}", raw):
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}T00:00:00+00:00"
+    return None
+
+
+# VTT -> plain text. Auto-captions repeat each line twice (once with per-word
+# timing tags, once plain) and roll the previous line into the next cue, so
+# naive stripping yields every sentence two or three times over.
+def clean_vtt(vtt):
+    text = _VTT_CUEHEAD.sub("", vtt or "")
+    text = _VTT_TIMING.sub("\n", text)
+    text = _VTT_INLINE.sub("", text)
+    lines = []
+    for line in text.splitlines():
+        line = _WS.sub(" ", html.unescape(line)).strip()
+        # Consecutive duplicates are the caption roll-up, not repetition in the
+        # speech; a global set would wrongly cut a genuinely repeated phrase.
+        if not line or (lines and lines[-1] == line):
+            continue
+        lines.append(line)
+    out = _WS.sub(" ", " ".join(lines)).strip()
+    words = out.split()
+    if len(words) > TRANSCRIPT_MAX_WORDS:
+        out = " ".join(words[:TRANSCRIPT_MAX_WORDS]) + " ..."
+    return out
+
+
+# One video's transcript, or None. Auto-generated captions count: the point is
+# what was said, not whether the uploader typed it out.
+def fetch_transcript(vid):
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "%(id)s")
+        # A non-zero exit here usually means "a later language 429'd", so the
+        # file on disk decides, not the return code.
+        run_ytdlp(["--skip-download", "--write-auto-subs", "--write-subs",
+                   "--sub-lang", YT_SUB_LANGS, "--sub-format", "vtt",
+                   "-o", out, YT_WATCH_URL.format(vid=vid)],
+                  YT_TRANSCRIPT_TIMEOUT)
+        try:
+            found = sorted(f for f in os.listdir(tmp) if f.endswith(".vtt"))
+        except OSError:
+            return None
+        if not found:
+            return None
+        # Prefer a real uploaded track (".en.vtt") over the auto one
+        # (".en-orig.vtt") when both landed -- same content, cleaner text.
+        found.sort(key=lambda f: ("-orig" in f, f))
+        try:
+            with open(os.path.join(tmp, found[0]), encoding="utf-8",
+                      errors="replace") as fh:
+                return clean_vtt(fh.read()) or None
+        except OSError:
+            return None
+
+
+# Top comments for one video. Where the buying pain gets stated plainly, same as
+# Reddit -- so this is enrichment worth its runtime, not a nice-to-have.
+def fetch_youtube_comments(vid):
+    # Four values, and the second (per-thread replies) must be non-zero or
+    # yt-dlp returns nothing at all -- a 0 there silently empties the result.
+    limit = MAX_YT_COMMENTS * 2
+    raw, _ = run_ytdlp(
+        ["--skip-download", "--write-comments",
+         "--extractor-args",
+         f"youtube:comment_sort=top;max_comments={limit},{limit},0,0",
+         "--dump-single-json", YT_WATCH_URL.format(vid=vid)],
+        YT_COMMENTS_TIMEOUT)
+    start = (raw or "").find("{")
+    if start == -1:
+        return []
+    try:
+        payload = json.loads(raw[start:])
+    except json.JSONDecodeError:
+        return []
+
+    comments = []
+    for item in payload.get("comments") or []:
+        if not isinstance(item, dict):
+            continue
+        body = _WS.sub(" ", (item.get("text") or "")).strip()
+        author = (item.get("author") or "").lstrip("@")
+        if not body or not author:
+            continue
+        comments.append({
+            "author": author,
+            "score": item.get("like_count") if isinstance(
+                item.get("like_count"), int) else 0,
+            "text": body[:300],
+            "url": YT_WATCH_URL.format(vid=vid),
+            "is_reply": item.get("parent") not in (None, "root"),
+        })
+    # Top-level comments before replies, then by likes.
+    comments.sort(key=lambda c: (not c["is_reply"], c["score"]), reverse=True)
+    return comments[:MAX_YT_COMMENTS]
+
+
+# ids -> full metadata, batched. Flat discovery has no dates, so this is what
+# makes date ranking possible at all.
+def hydrate_videos(video_ids):
+    hydrated = {}
+    for start in range(0, len(video_ids), YT_HYDRATE_BATCH):
+        batch = video_ids[start:start + YT_HYDRATE_BATCH]
+        raw, _ = run_ytdlp(
+            ["--no-download", "--dump-json"]
+            + [YT_WATCH_URL.format(vid=v) for v in batch],
+            YT_HYDRATE_TIMEOUT)
+        for video in parse_json_lines(raw):
+            vid = video.get("id")
+            if vid:
+                hydrated[vid] = video
+        missing = [v for v in batch if v not in hydrated]
+        if missing:
+            # Private, deleted, region-locked or age-gated. Named, because a
+            # silently shrinking result set reads as a quiet channel.
+            sys.stderr.write(f"youtube: {len(missing)} video(s) unavailable "
+                             f"({', '.join(missing[:3])})\n")
+    return hydrated
+
+
+# Discovery: ids only, cheap. Search and channel modes differ only in the URL.
+def discover_videos(target, cap, label):
+    raw, ok = run_ytdlp(["--no-download", "--flat-playlist", "--dump-json",
+                         "--playlist-end", str(cap), target],
+                        YT_DISCOVER_TIMEOUT)
+    found = []
+    for row in parse_json_lines(raw):
+        vid = row.get("id") or ""
+        if _YT_VIDEO_ID.fullmatch(vid):
+            found.append(vid)
+    if not found and not ok:
+        sys.stderr.write(f"{label}: discovery failed (unreachable or renamed)\n")
+    elif not found:
+        sys.stderr.write(f"{label}: no videos returned\n")
+    return found
+
+
+# Full YouTube run: discover -> hydrate for real dates -> window -> relevance ->
+# newest first -> transcripts and comments on the leaders.
+def run_youtube(args, entries):
+    channels = []
+    for entry in entries:
+        target = youtube_target(entry["handle"])
+        if target:
+            channels.append({"name": entry["name"], "target": target})
+        else:
+            sys.stderr.write(f"skipping (not a YouTube channel) :: {entry['handle'][:80]}\n")
+
+    if not channels and not args.query:
+        return emit("youtube", []) or sys.stderr.write(
+            f"Nothing under '## YouTube' in {WATCHLIST}, and no -q given.\n")
+
+    # Over-fetch: the date window and relevance floor both cut, and a channel
+    # posting weekly needs headroom before -d 7 leaves anything standing.
+    per_target = max(args.limit, 10) if args.query else max(args.per_source, 5)
+
+    if args.dry_run:
+        return print(json.dumps(
+            {"source": "youtube", "dry_run": True, "cost": "free",
+             "query": args.query,
+             "discovery_calls": len(channels) + (1 if args.query else 0),
+             "max_videos_examined": per_target * (len(channels) + (1 if args.query else 0)),
+             "transcripts_and_comments": args.enrich,
+             "watching": [c["name"] for c in channels]},
+            indent=2, ensure_ascii=False))
+
+    if not ytdlp_base():
+        raise SystemExit(
+            "yt-dlp not found. Install it with:  python -m pip install yt-dlp")
+
+    # Discovery. Both modes feed one id pool, deduped -- a watched channel's
+    # video that also matches the query must not appear twice.
+    order, sources = [], {}
+
+    def collect(vids, label):
+        for vid in vids:
+            if vid not in sources:
+                sources[vid] = label
+                order.append(vid)
+
+    if args.query:
+        collect(discover_videos(
+            YT_SEARCH_URL.format(n=per_target, query=args.query),
+            per_target, "search"), None)
+        sys.stderr.write(f"search '{args.query}': {len(order)} video(s) found\n")
+    for channel in channels:
+        before = len(order)
+        collect(discover_videos(channel["target"], per_target, channel["name"]),
+                channel["name"])
+        sys.stderr.write(f"{channel['name']}: {len(order) - before} new video(s)\n")
+
+    if not order:
+        return emit("youtube", [])
+
+    hydrated = hydrate_videos(order)
+
+    signals, out_of_window, live_skipped = [], 0, 0
+    for vid in order:
+        video = hydrated.get(vid)
+        if not video:
+            continue
+        if any(video.get(flag) for flag in YT_SKIP_LIVE):
+            live_skipped += 1
+            continue
+        date = youtube_date(video)
+        # Undated videos are kept, matching in_window's contract elsewhere in
+        # this file -- but they sort last, since date is the ranking key here.
+        if not in_window(date, args.days):
+            out_of_window += 1
+            continue
+        description = _WS.sub(" ", (video.get("description") or "")).strip()
+        signals.append({
+            "entity": sources.get(vid) or video.get("channel") or "search",
+            "author": video.get("channel") or video.get("uploader"),
+            "author_url": video.get("channel_url"),
+            "title": video.get("title") or "",
+            "text": description[:800],
+            "url": YT_WATCH_URL.format(vid=vid),
+            "date": date,
+            "video_id": vid,
+            "duration_seconds": video.get("duration"),
+            "views": as_count(video.get("view_count")),
+            "likes": as_count(video.get("like_count")),
+            "comments": as_count(video.get("comment_count")),
+            # Views, deliberately -- the best single indicator of reach on
+            # YouTube. Never a sum: views dwarf likes by orders of magnitude, so
+            # adding them would change nothing but the number's meaning. Still
+            # only a tiebreaker behind date.
+            "engagement": as_count(video.get("view_count")),
+        })
+
+    if live_skipped:
+        sys.stderr.write(f"skipped {live_skipped} live/upcoming stream(s)\n")
+    sys.stderr.write(f"{len(signals)} video(s) in the last {args.days}d "
+                     f"({out_of_window} outside the window)\n")
+
+    # Same guard as Reddit's: a search that matched on filler words would
+    # otherwise fill the brief with off-topic videos. Titles and descriptions
+    # only -- transcripts are not fetched yet, and fetching them all to filter
+    # would cost far more than the filter saves.
+    if args.query and signals:
+        for signal in signals:
+            signal["relevance"] = round(
+                relevance(args.query, f"{signal['title']} {signal['text']}"), 2)
+        floor = relevance_floor(args.query)
+        # A watched channel's video is kept regardless: the user asked to watch
+        # that channel, so it is on topic by definition.
+        kept = [s for s in signals
+                if sources.get(s["video_id"]) or s["relevance"] >= floor]
+        cut = len(signals) - len(kept)
+        if cut:
+            sys.stderr.write(f"{cut} of {len(signals)} video(s) cut below "
+                             f"relevance floor {round(floor, 2)}\n")
+        if not kept:
+            best = max((s["relevance"] for s in signals), default=0.0)
+            sys.stderr.write(f"nothing cleared the floor (best was {best}); "
+                             f"try a shorter or broader -q\n")
+            return emit("youtube", [], {"filtered_out": len(signals),
+                                        "best_relevance": best})
+        signals = kept
+
+    if not signals:
+        return emit("youtube", [])
+
+    # DATE first -- this is the whole point of the source. Views only separate
+    # two videos published the same day.
+    signals.sort(key=lambda s: (s["date"] or "", s["views"] or 0), reverse=True)
+    signals = signals[:args.limit]
+
+    # Transcripts and comments are the expensive part (2 yt-dlp calls each), so
+    # only the leaders get them -- and they are the reason to use this source at
+    # all, so --enrich 0 is a deliberate choice, not the default.
+    enriched = 0
+    for signal in signals[:args.enrich]:
+        transcript = fetch_transcript(signal["video_id"])
+        if transcript:
+            signal["transcript"] = transcript
+        else:
+            # Captions genuinely absent, or YouTube throttled us. Either way the
+            # analysis must not silently treat the video as having said nothing.
+            signal["transcript_unavailable"] = True
+        signal["top_comments"] = fetch_youtube_comments(signal["video_id"])
+        enriched += 1
+    if enriched:
+        got = sum(1 for s in signals[:enriched] if s.get("transcript"))
+        pulled = sum(len(s.get("top_comments") or []) for s in signals[:enriched])
+        sys.stderr.write(f"enriched {enriched} video(s): {got} transcript(s), "
+                         f"{pulled} comment(s)\n")
+
+    emit("youtube", signals)
+
+
 # Parses flags and hands off to the chosen source.
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--source", choices=("linkedin", "x", "reddit"), required=True)
+    parser.add_argument("--source", choices=("linkedin", "x", "reddit", "youtube"),
+                        required=True)
     parser.add_argument("-d", "--days", type=int, default=7)
     parser.add_argument("-n", "--limit", type=int, default=25)
-    parser.add_argument("-q", "--query", help="X and Reddit: free-text topic research")
+    parser.add_argument("-q", "--query",
+                        help="X, Reddit and YouTube: free-text topic research")
     parser.add_argument("--per-source", type=int, default=10,
-                        help="LinkedIn only: max posts per watchlist line (this is the bill)")
+                        help="LinkedIn: max posts per watchlist line (this is the bill). "
+                             "YouTube: how many recent videos to examine per channel (free)")
     parser.add_argument("--enrich", type=int, default=5,
-                        help="Reddit only: how many top posts get their comments fetched")
+                        help="Reddit: how many top posts get their comments fetched. "
+                             "YouTube: how many top videos get transcript + comments")
     parser.add_argument("--model", default=XAI_MODEL, help=f"X only (default {XAI_MODEL})")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -870,8 +1290,12 @@ def main():
     load_env()
     if args.source == "linkedin":
         if args.query:
-            raise SystemExit("-q is X and Reddit only; LinkedIn reads the watchlist.")
+            raise SystemExit("-q is X, Reddit and YouTube only; LinkedIn reads the watchlist.")
         run_linkedin(args, read_watchlist("LinkedIn"))
+    elif args.source == "youtube":
+        # In query mode a missing watchlist must not be fatal.
+        entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("YouTube")
+        run_youtube(args, entries)
     elif args.source == "reddit":
         # In query mode a missing watchlist must not be fatal.
         entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("Reddit")

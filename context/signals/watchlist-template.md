@@ -24,6 +24,8 @@ r/SaaS
 
 ## YouTube
 
+Read by `--source youtube`. Free, but needs `pip install yt-dlp`.
+
 Acme Corp: https://youtube.com/@acme
 
 ## Substack

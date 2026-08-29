@@ -21,6 +21,7 @@ Core offer: [e.g. premium content + qualified founder conversations]
 - **RapidAPI (`linkedin-api8`)**: setup profile extraction and post-engagers extraction
 - **Apify (`supreme_coder/linkedin-post`)**: LinkedIn post listening (bills per post)
 - **xAI Grok (`x_search`)**: X/Twitter listening + free-text X research
+- **yt-dlp**: YouTube listening — search, channels, transcripts, comments (free, keyless)
 - **Python (stdlib only)**: signal watching scripts in `scripts/signals/`
 
 ## Workflow
@@ -61,6 +62,8 @@ Read skills/social-listening/SKILL.md and search X for what people say about [to
 
 Read skills/social-listening/SKILL.md and check Reddit for what people say about [topic]
 
+Read skills/social-listening/SKILL.md and check YouTube for what people say about [topic]
+
 Read skills/intent-signals/SKILL.md and check buying signals for my watchlist
 ```
 
@@ -69,17 +72,21 @@ Read skills/intent-signals/SKILL.md and check buying signals for my watchlist
 Two separate context files, copied from their `-template.md` siblings:
 
 - `context/signals/watchlist.md` — WHO to watch. One line per entity,
-  `Name: handle`, grouped by platform. Reddit is just `r/subreddit`.
+  `Name: handle`, grouped by platform. Reddit is just `r/subreddit`; YouTube
+  takes `Name: @handle` or a channel URL.
   Read directly by the scripts.
 - `context/signals/signals.md` — WHAT counts as a signal and how to rank it.
   Read by the skills, not the scripts. Optional but sharpens results.
 
 Listening runs from one script, `scripts/signals/social-listening.py`,
 with `--source linkedin` (Apify, bills per post), `--source x` (xAI Grok
-`x_search`, one call per run), or `--source reddit` (keyless RSS + arctic-shift
+`x_search`, one call per run), `--source reddit` (keyless RSS + arctic-shift
 scores + shreddit comments; free, but paced ~2s per request so a multi-subreddit
-run takes a couple of minutes). All three return real engagement counts and sort
-by them. Intent sources live in `scripts/signals/intent/`.
+run takes a couple of minutes), or `--source youtube` (yt-dlp; free and keyless,
+but needs `pip install yt-dlp` — searches topics or watched channels and pulls
+transcripts + top comments). The first three return real engagement counts and
+sort by them; **YouTube sorts by date, newest first**, since an old video with
+high views is not a signal. Intent sources live in `scripts/signals/intent/`.
 
 Both skills ALWAYS ask which sources to run before running anything. They
 never run every source by default, and they report conversationally in chat

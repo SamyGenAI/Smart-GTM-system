@@ -1,6 +1,6 @@
 ---
 name: social-listening
-description: Monitor what watched competitors and creators are posting on LinkedIn, X, and Reddit. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals — the posts most relevant to the user's business, most recent first — with brief analysis; a full table of every post is offered on request. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]".
+description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, and YouTube. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals — the posts most relevant to the user's business, most recent first — with brief analysis; a full table of every post is offered on request. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish".
 ---
 
 # Social Listening
@@ -22,9 +22,10 @@ One script, `scripts/signals/social-listening.py`, with `--source`:
 | `linkedin` | bills per post scraped | `APIFY_API_KEY` |
 | `x` | one API call per run, `-n` is ~free | `X_API_KEY` |
 | `reddit` | free — no key, no credits | nothing |
+| `youtube` | free — no key, no credits | `yt-dlp` installed |
 
 Who to watch: `context/signals/watchlist.md`, under `## LinkedIn` / `## X` /
-`## Reddit`.
+`## Reddit` / `## YouTube`.
 What counts as a signal: `context/signals/signals.md` if it exists — use it to
 judge relevance and ordering. If missing, use judgement and say once that
 filling it in sharpens future runs.
@@ -38,7 +39,8 @@ alone, or on a topic question). Say how many entities each watches.
 
 Skip the question when the user named the source ("check LinkedIn", "check
 Reddit"). A topic question with no source named is query mode — ask whether to
-run it on X, Reddit, or both, since both answer it and Reddit is free.
+run it on X, Reddit, or YouTube (or several), since all three answer it and
+Reddit and YouTube are free.
 
 When Reddit is one of the chosen sources, also settle **what** it watches before
 running: a topic/keyword/brand (`-q`) or the watchlist subreddits (no `-q`).
@@ -54,10 +56,13 @@ python scripts/signals/social-listening.py --source x -d 7 -n 25
 python scripts/signals/social-listening.py --source x -q "AI ghostwriting pricing"
 python scripts/signals/social-listening.py --source reddit -d 7 -n 25 --enrich 5
 python scripts/signals/social-listening.py --source reddit -q "linkedin ghostwriting pricing"
+python scripts/signals/social-listening.py --source youtube -d 30 -n 15 --per-source 8 --enrich 3
+python scripts/signals/social-listening.py --source youtube -q "linkedin ghostwriting" --enrich 3
 ```
 
-Both print `{"source","count","signals":[...]}` to stdout, **already sorted by
-engagement, highest first**. Per-entity notes go to stderr. The JSON is for you;
+All print `{"source","count","signals":[...]}` to stdout, **already sorted — by
+engagement (highest first) on LinkedIn, X and Reddit, and by date (newest
+first) on YouTube**. Per-entity notes go to stderr. The JSON is for you;
 never paste it into chat. Sources are independent — run them in parallel.
 
 **LinkedIn** — `--per-source` (default 10) caps posts per watchlist line; one run
@@ -78,6 +83,42 @@ real, from the arctic-shift archive, and are point-in-time so they can lag live
 by a little. `--enrich` (default 5) sets how many top posts get their comment
 threads pulled; the comments are usually where the buying pain is stated
 plainly, so read them.
+
+**YouTube** — free and keyless, but needs `yt-dlp` on PATH
+(`python -m pip install yt-dlp`); the script says so and exits if it is missing.
+Slower than the others: a run does one discovery call per channel, then batched
+metadata calls, then two more calls per enriched video, so budget a few minutes
+and do not treat it as a hang.
+
+Unlike every other source, **YouTube is ranked by date, newest first** — views
+only break ties between videos published the same day. That is deliberate: an
+old video with 500k views is not news, and this week's 400-view upload from a
+competitor is. Do not re-sort it by views when reporting.
+
+It has the same two modes as Reddit. `-q "..."` searches all of YouTube; with no
+`-q` it pulls recent uploads from the channels under `## YouTube`. Both can run
+at once — watchlist videos are kept regardless of the relevance floor, since a
+channel the user chose to watch is on topic by definition. Pass keywords, not
+the user's sentence, exactly as with Reddit.
+
+`--per-source` (default 10) is how many recent videos to examine per channel —
+free here, it is not a bill like LinkedIn's. Widen `-d` for YouTube: channels
+publish weekly at best, so `-d 7` often returns nothing and `-d 30` is the more
+useful default.
+
+`--enrich` (default 5) sets how many of the top videos get their **transcript
+and top comments** pulled. This is the reason to use the source at all — the
+transcript is what was actually said, and the comments are where viewers state
+the pain. Read both before ranking. A video carrying `transcript_unavailable`
+had no captions or was throttled; say so rather than treating it as having said
+nothing. Videos below the `--enrich` cutoff simply have no transcript key —
+that is not a failure, just a budget line, so never report those as silent.
+
+Engagement on YouTube is `views` — the best single indicator of reach there.
+It is never a sum: views dwarf likes by orders of magnitude, so adding them
+would change nothing but the number's meaning. `views`, `likes` and `comments`
+are all still reported separately, and a `null` means the count was hidden, not
+zero.
 
 **Reddit has two modes — pick one deliberately, they answer different
 questions.**
@@ -171,11 +212,17 @@ no matter how well they performed: general-audience philosophy, politics,
 history and human-interest storytelling, health, personal-life posts, and
 commentary on products the user's buyers do not touch.
 
-**Reddit comments outrank Reddit post text.** When a post carries
-`top_comments`, read them before ranking it: a thread's replies are where
-buyers state a price they paid, name the agency they fired, or admit the
-problem the post only gestures at. Quote a comment in the analysis where it
-says something the post does not, and attribute it to the commenter.
+**Reddit and YouTube comments outrank the post text.** When an item carries
+`top_comments`, read them before ranking it: replies are where buyers state a
+price they paid, name the agency they fired, or admit the problem the post only
+gestures at. Quote a comment in the analysis where it says something the post
+does not, and attribute it to the commenter.
+
+**On YouTube, read the `transcript` before ranking.** A title sells the click;
+the transcript is what was actually said, and it is often where a competitor
+names their price, their delivery model, or their client count. Rank and quote
+from it, not from the title. Cite a timestamp-free quote and attribute it to the
+channel.
 
 **Recency is a ranking input, not just a filter.** Within the window, newer
 outranks older when relevance is comparable; call out anything from the last
@@ -226,7 +273,11 @@ answered from it — never re-run the script to rebuild the table, since a
 LinkedIn re-run bills again.
 
 **One markdown table** across whatever ran — all sources merged into a single
-table, sorted by `engagement` descending. Not a table per source.
+table, sorted by `engagement` descending. Not a table per source. When the run
+is YouTube-only, sort the table by date instead, matching how the source ranks —
+otherwise an old video with high view counts leads a table meant to show what is
+recent. In a mixed run keep the engagement sort, but note that YouTube's number
+is views and so is not comparable to a LinkedIn or Reddit count.
 
 Columns, in this order:
 
@@ -234,15 +285,16 @@ Columns, in this order:
 |---|---|---|---|---|---|
 
 - **Author** — the post's `author`, not the watchlist `entity`. On Reddit that
-  is the redditor; put the subreddit (`entity`) in the summary. When they differ
+  is the redditor; put the subreddit (`entity`) in the summary. On YouTube it
+  is the channel. When they differ
   (a repost surfaced through a watched profile), use the real author and note the
   watchlist line it came from in the summary.
-- **Src** — `LI`, `X`, or `RD`.
+- **Src** — `LI`, `X`, `RD`, or `YT`.
 - **Eng** — the `engagement` number, plain digits. A **null** means the count was
   unknown, not zero — write `?`, never `0`.
 - **Breakdown** — `<likes>/<reposts>/<replies>` on X,
   `<reactions>/<comments>/<shares>` on LinkedIn, `<upvotes>/<comments>` on
-  Reddit, slash-separated, digits only.
+  Reddit, `<views>/<likes>/<comments>` on YouTube, slash-separated, digits only.
 - **Summary** — 1-2 sentences on what the post says. Keep it to roughly 200
   characters so the row stays readable; the table is the deliverable, so trade
   detail for scannability here rather than letting one cell dominate.
