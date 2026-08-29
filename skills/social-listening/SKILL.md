@@ -88,9 +88,26 @@ place: a topic ("what do people say about LinkedIn ghostwriting"), a keyword, a
 competitor's brand, or a category. It reaches far past the watchlist — one
 three-word query pulled 97 posts from 22 subreddits, none of them watchlisted —
 so it is the right default for finding buyers who are not where you expected.
-Posts sharing too few words with `-q` are cut before ranking, so a viral
-off-topic thread cannot hijack the brief; the cut scales with query length
-(one term must match a one-word query, two for anything longer).
+Reddit's own search ranks the `-q` hits, and those are kept as ranked. The
+local relevance cut applies only to the subreddit listing feeds, which carry no
+query — that is what stops a viral off-topic thread from hijacking the brief.
+
+**Pass keywords, not the user's sentence.** Search results are no longer
+re-filtered locally, so query quality is what decides relevance: a vague
+sentence returns whatever Reddit matched on its filler words. Shorten to the
+1-2 words that would actually appear in a post worth reading:
+
+| User asks | Pass | Not |
+|---|---|---|
+| "what are the latest trends in AI" | `-q "AI agents"` | `-q "what are the latest trends in AI"` |
+| "monitor mentions of Taplio" | `-q "Taplio"` | `-q "monitor mentions of Taplio"` |
+| "what do founders say about hiring ghostwriters" | `-q "ghostwriter"` | `-q "founders hiring ghostwriters"` |
+
+A vague query returns noise rather than nothing: "what are the latest trends
+in AI" pulled 21 posts, several matched only on "latest" or "trends". Skim and
+drop those when reporting rather than presenting them as signal. `nothing
+cleared the floor` now only appears in subreddit mode; in search mode an empty
+result means Reddit found nothing, so broaden the keyword.
 
 *Subreddit mode* (no `-q`) pulls the top/hot feeds of whatever is under
 `## Reddit` in the watchlist. Use it when the user names places ("check

@@ -730,10 +730,14 @@ def run_reddit(args, entries):
 
     posts, seen = [], set()
     for feed in feeds:
+        # Reddit already ranked search.rss hits against the query; the local
+        # relevance floor below is for the listing feeds, which carry no query.
+        from_search = "search.rss" in feed
         for post in parse_feed(http_text(feed, accept="application/atom+xml") or ""):
             if post["url"] in seen or not in_window(post["date"], args.days):
                 continue
             seen.add(post["url"])
+            post["from_search"] = from_search
             posts.append(post)
     # Scored discovery, merged into the RSS pool. On a URL collision the RSS
     # post wins the body text (listings carry none) but inherits the live
@@ -774,7 +778,11 @@ def run_reddit(args, entries):
             post["relevance"] = round(
                 relevance(args.query, f"{post['title']} {post['text']}"), 2)
         floor = relevance_floor(args.query)
-        kept = [p for p in posts if p["relevance"] >= floor]
+        # Search hits pass on Reddit's ranking -- re-filtering them locally
+        # discards good results whose wording differs from the query
+        # ("AI agents..." for -q "AI trends"). Only unsearched posts are cut.
+        kept = [p for p in posts
+                if p.get("from_search") or p["relevance"] >= floor]
         sys.stderr.write(f"{len(posts) - len(kept)} of {len(posts)} post(s) cut "
                          f"below relevance floor {round(floor, 2)}\n")
         if not kept:
@@ -811,6 +819,7 @@ def run_reddit(args, entries):
             post["score_source"] = "arctic (archived)" if found else None
         post.pop("live_upvotes", None)
         post.pop("live_comments", None)
+        post.pop("from_search", None)
         post["engagement"] = ((post["upvotes"] or 0) + (post["comments"] or 0)
                               if post["upvotes"] is not None else None)
 
