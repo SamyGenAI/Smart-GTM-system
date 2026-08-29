@@ -28,13 +28,25 @@ Read by `--source youtube`. Free, but needs `pip install yt-dlp`.
 
 Acme Corp: https://youtube.com/@acme
 
-## Substack
+## Gmail
 
-Some Newsletter: https://somenewsletter.substack.com
+> Read by `skills/social-listening` via the Gmail connector — no script, no key.
+> Free, and strictly read-only: it searches and reads, never sends, labels or
+> deletes. Needs the Gmail connector authorized in your claude.ai settings.
+>
+> One newsletter per line — just the name, as you'd say it out loud. No email
+> address needed: Claude looks up who it actually comes from, and catches the
+> several addresses a writer with multiple publications sends from.
+>
+> Only newsletters named here, plus the promotions/updates categories, are ever
+> read. The primary inbox is out of scope, so personal and client mail is never
+> touched. Ranked by date, newest first — a newsletter has no engagement count.
+>
+> Not connected? Claude offers to walk you through it; decline and the source
+> is skipped.
 
-## Newsletters
-
-Some Roundup: https://example.com/newsletter
+Lenny Rachitsky — Lenny's Newsletter
+The Neuron
 
 ## Web
 

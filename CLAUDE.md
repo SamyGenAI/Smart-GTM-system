@@ -23,6 +23,7 @@ Core offer: [e.g. premium content + qualified founder conversations]
 - **xAI Grok (`x_search`)**: X/Twitter listening + free-text X research
 - **yt-dlp**: YouTube listening — search, channels, transcripts, comments (free, keyless)
 - **Web search**: harness-native search first, then Brave/EXA/Serper/Parallel by key, then keyless DuckDuckGo/Startpage
+- **Gmail connector (MCP)**: read-only newsletter digest — no script, no key
 - **Python (stdlib only)**: signal watching scripts in `scripts/signals/`
 
 ## Workflow
@@ -67,6 +68,8 @@ Read skills/social-listening/SKILL.md and check YouTube for what people say abou
 
 Read skills/social-listening/SKILL.md and check the web for what people say about [topic]
 
+Read skills/social-listening/SKILL.md and digest this week newsletters from Gmail
+
 Read skills/intent-signals/SKILL.md and check buying signals for my watchlist
 ```
 
@@ -76,7 +79,8 @@ Two separate context files, copied from their `-template.md` siblings:
 
 - `context/signals/watchlist.md` — WHO to watch. One line per entity,
   `Name: handle`, grouped by platform. Reddit is just `r/subreddit`; YouTube
-  takes `Name: @handle` or a channel URL; Web takes `Name: domain.com`.
+  takes `Name: @handle` or a channel URL; Web takes `Name: domain.com`; Gmail
+  takes just the newsletter's name.
   Read directly by the scripts.
 - `context/signals/signals.md` — WHAT counts as a signal and how to rank it.
   Read by the skills, not the scripts. Optional but sharpens results.
@@ -91,6 +95,17 @@ transcripts + top comments), or `--source web` (Brave/EXA/Serper/Parallel when
 a key is set, else a free keyless DuckDuckGo/Startpage floor). The first three
 return real engagement counts and sort by them; **YouTube and Web sort by date,
 newest first**, since an old video or page is not a signal.
+
+**Gmail is the one source with no script.** It runs through the Gmail MCP
+connector, strictly read-only — search and read, never send, label or delete.
+Free, no key: authorize the connector in claude.ai settings. `## Gmail` holds
+newsletter **names**, not addresses — Claude resolves each to its real sending
+addresses at run time, catching the several a writer with multiple publications
+uses. It reads only those plus the promotions/updates categories, so the primary
+inbox — personal and client mail — is never in scope. Sorted by
+date, newest first, since a newsletter has no engagement count, and reported as
+one line per issue rather than per story.
+
 Intent sources live in `scripts/signals/intent/`.
 
 The web source is the bottom two rungs of a three-rung ladder: the agent's own

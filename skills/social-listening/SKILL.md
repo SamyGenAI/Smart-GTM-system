@@ -1,6 +1,6 @@
 ---
 name: social-listening
-description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, YouTube, and the open web. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals grouped by source — the posts most relevant to the user's business, most recent first — with brief analysis per source; a per-source table extract is offered on request, and the full run beyond that. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish", "what is the web saying about [topic]", "search the web for [topic]".
+description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, YouTube, the open web, and newsletters in Gmail. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals grouped by source — the posts most relevant to the user's business, most recent first — with brief analysis per source; a per-source table extract is offered on request, and the full run beyond that. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish", "what is the web saying about [topic]", "search the web for [topic]", "what did my newsletters say this week", "digest my newsletters", "check Gmail newsletters".
 ---
 
 # Social Listening
@@ -17,7 +17,9 @@ rows of each source, with the rest offered below it. No file is written.
 
 ## Sources
 
-One script, `scripts/signals/social-listening.py`, with `--source`:
+Five run through one script, `scripts/signals/social-listening.py`, with
+`--source`. **Gmail is the exception — it has no script**, and is read with the
+Gmail MCP tools directly:
 
 | Source | Cost | Needs |
 |---|---|---|
@@ -26,9 +28,10 @@ One script, `scripts/signals/social-listening.py`, with `--source`:
 | `reddit` | free — no key, no credits | nothing |
 | `youtube` | free — no key, no credits | `yt-dlp` installed |
 | `web` | free keyless, or one API call per query | nothing, or a search key |
+| `gmail` | free — no key, no credits | Gmail connector authorized |
 
 Who to watch: `context/signals/watchlist.md`, under `## LinkedIn` / `## X` /
-`## Reddit` / `## YouTube` / `## Web`.
+`## Reddit` / `## YouTube` / `## Web` / `## Gmail`.
 What counts as a signal: `context/signals/signals.md` if it exists — use it to
 judge relevance and ordering. If missing, use judgement and say once that
 filling it in sharpens future runs.
@@ -49,6 +52,27 @@ Web qualifies for the question on entries alone or on a topic question, like
 Reddit — it needs no key, since the keyless floor always works. When Web is
 chosen for a topic question and you have a native web search tool, use that tool
 rather than the script; see the Web notes in Step 2.
+
+Gmail reads the user's own inbox, so unlike every other source it is **never**
+offered for an open-web topic question and never runs unasked. Offer it when
+`## Gmail` has entries — or when the user asks for newsletters and it is empty,
+in which case offer to fill the section in.
+
+When the user names a newsletter to watch, **write the name they said** into
+`## Gmail` — never an email address. Addresses are resolved at run time and can
+change; the name is what the user recognises a year later.
+
+**If the connector is not authorized, offer to set it up.** The Gmail tools
+(`search_threads`, `get_thread`) missing from this session means it is not
+connected. Still offer Gmail in the question, labelled "needs connecting" — if
+the user picks it, walk them through it: claude.ai → Settings → Connectors →
+Gmail → Connect, then re-run. It is a browser flow you cannot perform for them,
+so never ask for a token, code or app password, and never reach their mail any
+other way.
+
+**If they decline, skip the source and move on.** No second ask, no reminder
+next run. Report the other sources normally and say nothing more about Gmail
+than that it was skipped.
 
 When Reddit is one of the chosen sources, also settle **what** it watches before
 running: a topic/keyword/brand (`-q`) or the watchlist subreddits (no `-q`).
@@ -74,6 +98,10 @@ All print `{"source","count","signals":[...]}` to stdout, **already sorted — b
 engagement (highest first) on LinkedIn, X and Reddit, and by date (newest
 first) on YouTube and Web**. Per-entity notes go to stderr. The JSON is for you;
 never paste it into chat. Sources are independent — run them in parallel.
+
+Gmail has no line here: it runs through the Gmail MCP tools, not this script.
+See the Gmail notes below, and shape its results into the same `signals` fields
+so Step 3 treats it like any other source.
 
 **LinkedIn** — `--per-source` (default 10) caps posts per watchlist line; one run
 scrapes at most `lines x --per-source`, and that is the bill. `-d` filters after
@@ -176,6 +204,95 @@ Pass keywords, not the user's sentence, exactly as with Reddit and YouTube —
 the same relevance floor applies to `-q` results. Results from a watched
 `## Web` domain are exempt from that floor, since a domain the user chose to
 watch is on topic by definition.
+
+**Gmail — no script, use the MCP tools.** This is the only source without a
+`--source` flag. The Gmail connector already handles OAuth, so there is nothing
+to install, no key in `.env`, and no token to refresh.
+
+*Not connected, or the call errors on auth?* The connection is missing or
+lapsed. Say so in one line, offer to walk them through claude.ai → Settings →
+Connectors, and carry on — the other sources still report in full, and Gmail
+gets a block saying it was not read.
+
+**Read-only, always.** Use `search_threads`, `get_thread` and `get_message`, and
+nothing else. The Gmail connector also exposes send, reply, draft, label, trash
+and spam tools — **none of them belong in this skill.** Social listening reads;
+it never writes, never marks anything read, never labels, never replies. If the
+user wants mail sent, that is a different task, not this one.
+
+*The watchlist holds names, not addresses.* `## Gmail` lines are what the user
+would say out loud — `Aakash Gupta — Product Growth`. **Resolve each name to its
+real sending addresses first**, with one broad search on the distinctive words
+in the name:
+
+```
+from:(aakash OR "product growth") newer_than:90d
+```
+
+Read the senders off those results. Expect **more than one address per name**: a
+writer with several publications sends from several, and Substack in particular
+uses `name+publication@substack.com` per publication — Aakash Gupta resolves to
+four. Take every address whose issues plainly belong to that writer or
+publication, and say which you matched when you report, so a wrong guess is
+visible. If a name resolves to nothing, say so and ask for a forwarded issue
+rather than guessing an address.
+
+Resolution is the only reason to search on a name rather than an address, and it
+is still bounded — `from:` with the name's own words, never a body search across
+the inbox. Do it once per run, not per source.
+
+*Scope — two rings, both bounded.* Once resolved, every query is pinned to those
+addresses plus the newsletter categories, so the primary inbox is out of scope:
+
+```
+from:(aakashgupta@substack.com OR aakashgupta+getting-a-pm-job@substack.com) newer_than:7d
+{category:promotions category:updates} newer_than:7d -in:sent
+```
+
+Run the first for the watchlist, the second to catch newsletters the user never
+listed. **Never widen past those two.** A bare inbox sweep, `in:anywhere`, a
+`from:` a person rather than a list, or a search of the primary category reads
+personal and client mail, and this skill does not do that — no matter how the
+question is phrased. A topic question is answered by adding terms *inside* those
+two rings, never by dropping them.
+
+Anything the categories surface that is plainly not a newsletter — a receipt, a
+calendar notice, a password reset, a personal thread that landed in updates — is
+dropped without being summarised or quoted. Say how many were dropped, not what
+they were.
+
+*One call per name to resolve, then one for the whole watchlist.* After
+resolution, a single `search_threads` covers every newsletter via the `OR` list
+above — do not loop per sender or per address. Use
+`view: THREAD_VIEW_MINIMAL` so the listing returns subject and snippet, rank
+those by relevance, then call `get_thread` with
+`messageFormat: "PLAIN_TEXT"` on only the top few. `PLAIN_TEXT` converts the
+HTML newsletter to text, which is the whole reason not to write a script.
+
+That second step is Gmail's `--enrich`: **5 issues by default.** Newsletter
+bodies are long, and fetching twenty in full will exhaust the context window
+before the report is written. Issues below the cutoff are reported from subject
+and snippet alone — that is a budget line, not a failure, so never call them
+empty.
+
+`newer_than:7d` matches the other sources' `-d`. Widen it like YouTube: most
+newsletters ship weekly, so `newer_than:30d` is often the more useful window.
+Gmail's search is date-accurate, so unlike the keyless Web floor the window is
+real and can be trusted.
+
+*Shape the result like every other source*, so Step 3 treats it identically:
+`entity` is the watchlist name (or the sender's list name when the categories
+surfaced it), `author` the sender, `text` the plaintext body, `date` the
+received date, and `url` the thread permalink
+`https://mail.google.com/mail/u/0/#inbox/<threadId>`.
+
+`engagement` is **always `null`** on Gmail. A newsletter reports no public
+counts — write `—` in the table exactly as with Web, never `0`, and never invent
+an open or click number.
+
+**Gmail is ranked by date, newest first**, joining YouTube and Web for the same
+reason: there is no engagement to rank by, and last month's issue is not a
+signal. Do not re-sort it.
 
 **Reddit has two modes — pick one deliberately, they answer different
 questions.**
@@ -297,7 +414,21 @@ names their price, their delivery model, or their client count. Rank and quote
 from it, not from the title. Cite a timestamp-free quote and attribute it to the
 channel.
 
-**Recency is a ranking input, not just a filter.** Within the window, newer
+**On Gmail, one line per issue — not per story.** A newsletter is one item, like
+a post: `<Newsletter> — — <what the issue covered, then the one item that
+matters to the user> — <link>`. The Eng slot is empty because there is no count.
+Lead the summary with the issue's own subject matter, then name the single most
+relevant item in it and why — a competitor mentioned, a price quoted, a tool the
+user's buyers are moving to. Quote the newsletter's own words for that item
+rather than paraphrasing, since the wording is the evidence.
+
+Five newsletters covering the same launch stay five lines. Say it once in the
+block's analysis — *"four of five led with X"* — rather than collapsing the
+rows; repetition across issues is itself the signal, and collapsing hides it.
+
+Issues fetched only as subject and snippet (below the enrich cutoff) are ranked
+and reported from that, and marked as such in one word. Never summarise a body
+that was not fetched. Within the window, newer
 outranks older when relevance is comparable; call out anything from the last
 48 hours. Say so plainly if the most relevant posts are all from the window's
 far edge.
@@ -305,6 +436,10 @@ far edge.
 Fewer than 5 in a block is correct and expected when that source ran thin —
 never pad to reach five. A source that qualified nothing gets one line saying
 so, and still gets its block, so its silence is visible rather than absent.
+
+**"Found nothing" and "could not read it" are different.** A source that was
+unreachable — Gmail not connected, a rate-limited subreddit, a dead LinkedIn
+profile — says so plainly and never reads as "quiet".
 
 Format each post as one line: `<Author> — <eng> — <what the post is> — <link>`.
 
@@ -340,7 +475,7 @@ outside the Top Signals.
 
 **One table per source, never a merged one.** Each keeps its own sort: by
 `engagement` descending on LinkedIn, X and Reddit; by date, newest first, on
-YouTube and Web, matching how those sources rank. Head each table with one line
+YouTube, Web and Gmail, matching how those sources rank. Head each table with one line
 stating the source, window and how many of its posts are shown out of how many
 it returned.
 
@@ -369,16 +504,19 @@ There is no `Src` column — the table's heading already names the source.
 
 - **Author** — the post's `author`, not the watchlist `entity`. On Reddit that
   is the redditor; put the subreddit (`entity`) in the summary. On YouTube it
-  is the channel. When they differ
+  is the channel. On Gmail it is the newsletter's name, not the raw sending
+  address — put the address in the summary when it is not obvious. When they differ
   (a repost surfaced through a watched profile), use the real author and note the
   watchlist line it came from in the summary.
 - **Eng** — the `engagement` number, plain digits. A **null** means the count was
-  unknown, not zero — write `?`, never `0`. On YouTube this is views; on Web
-  there is no number at all, so the column reads `—` in every row.
+  unknown, not zero — write `?`, never `0`. On YouTube this is views; on Web and
+  Gmail there is no number at all, so the column reads `—` in every row.
 - **Breakdown** — `<likes>/<reposts>/<replies>` on X,
   `<reactions>/<comments>/<shares>` on LinkedIn, `<upvotes>/<comments>` on
   Reddit, `<views>/<likes>/<comments>` on YouTube, slash-separated, digits only.
-  Web has no counts at all — write `—`, not `?` or `0`.
+  Web and Gmail have no counts at all — write `—`, not `?` or `0`. On Gmail use
+  the column for the received date instead, `YYYY-MM-DD`, since date is what the
+  table is sorted by and the reader needs it visible.
 - **Summary** — 1-2 sentences on what the post says. Keep it to roughly 200
   characters so the row stays readable; the table is the deliverable, so trade
   detail for scannability here rather than letting one cell dominate.
