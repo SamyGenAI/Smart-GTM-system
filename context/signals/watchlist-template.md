@@ -17,6 +17,8 @@ Acme Corp: https://x.com/acme
 
 ## Reddit
 
+Read by `--source reddit`. Free — no key, no credits. Just the subreddit.
+
 r/sales
 r/SaaS
 

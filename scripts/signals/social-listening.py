@@ -2,17 +2,22 @@
 
 --source linkedin  Apify actor, bills per post scraped.
 --source x         xAI Grok x_search, one call per run; -q for topic research.
+--source reddit    keyless RSS + arctic-shift + shreddit; free, no API key.
 
 Prints JSON to stdout. Run from the repo root.
 """
 
 import argparse
+import html
 import json
 import os
 import re
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 # Windows consoles default to cp1252 and mangle the JSON the agent reads.
@@ -398,15 +403,457 @@ def run_x(args, entries):
     emit("x", signals[:args.limit])
 
 
+# --- Reddit -------------------------------------------------------------------
+#
+# Keyless and free, three public endpoints stitched together:
+#   1. RSS       reddit.com/.../*.rss      -> discovery (titles + urls, no score)
+#   2. listing   reddit.com/svc/shreddit/  -> discovery WITH live scores
+#   3. arctic    arctic-shift.photon-...   -> archived counts by id (fallback)
+#   4. shreddit  reddit.com/svc/shreddit/  -> top comments
+# Reddit's .json API now answers 403 to anything without a key; these four
+# still answer 200, so the whole source costs nothing.
+#
+# (2) complements (1) rather than replacing it: the listing partial server-
+# renders each post's score but takes no query, while RSS searches but carries
+# no engagement. Watchlist runs get both; query runs still lean on RSS search.
+# Neither can be dropped -- if Reddit changes the listing markup, the source
+# degrades to the original RSS+arctic path instead of going dark.
+
+ATOM = "{http://www.w3.org/2005/Atom}"
+ARCTIC_URL = "https://arctic-shift.photon-reddit.com/api/posts/ids"
+SHREDDIT_URL = "https://www.reddit.com/svc/shreddit/comments/r/{sub}/t3_{post_id}?sort=top"
+# The subreddit listing partial. Unlike the comments partial it renders whole
+# post cards, each <shreddit-post> start tag carrying a live score.
+LISTING_URL = "https://www.reddit.com/svc/shreddit/community-more-posts/{sort}/?name={sub}"
+# "new" is the gap RSS+arctic leaves: a thread posted hours ago is absent from
+# top/hot and too fresh for the arctic archive, so it scores as unknown today.
+LISTING_SORTS = ("top", "hot", "new")
+BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+REDDIT_TIMEOUT = 20
+# Reddit 429s a burst of feed requests, and a throttled run silently collapses to
+# whichever feed happened to land -- one subreddit posing as the whole watchlist.
+REDDIT_PACE = 2.0       # seconds between reddit.com requests
+REDDIT_RETRIES = 2      # a 429 is transient; back off and try again
+ARCTIC_BATCH = 50       # ids per lookup; arctic 422s ("slow down") if hammered
+MAX_COMMENTS = 8        # top comments kept per enriched post
+# A post matching one word of a four-word query is not on topic -- "hiring a
+# ghostwriter for linkedin" must not surface a LinkedIn hiring thread with no
+# ghostwriting in it. But a fixed fraction breaks both ways: at 0.5 a
+# three-term query cut all 29 results, because no title pairs "ghostwriting"
+# with "pricing". So the bar is a term count, not a ratio -- one term for a
+# one-word query, two for anything longer, which is strict enough to stop the
+# hijack and loose enough to return a run.
+def relevance_floor(query):
+    terms = query_terms(query)
+    return (min(2, len(terms)) / len(terms)) if terms else 0.0
+
+# The listing feeds carry no query, so a subreddit's viral off-topic post would
+# otherwise outrank every on-topic one. Stopwords are dropped so "the"/"a" can't
+# manufacture overlap.
+STOPWORDS = {"the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "is",
+             "it", "with", "my", "how", "what", "why", "do", "does", "i", "you",
+             "we", "this", "that", "at", "by", "from", "are", "be", "as", "not"}
+
+_TAG = re.compile(r"<[^>]+>")
+_WS = re.compile(r"\s+")
+_PARA = re.compile(r"<p[^>]*>(.*?)</p>", re.DOTALL)
+# The exact <shreddit-comment> start tag -- the lookahead stops it matching
+# <shreddit-comment-tree> and friends.
+_COMMENT_TAG = re.compile(r"<shreddit-comment(?=[\s>])[^>]*>")
+_NEXT_BODY = re.compile(r'id="t1_[A-Za-z0-9]+-(?:comment|post)-rtjson-content"')
+_POST_REF = re.compile(r"/r/([^/]+)/comments/([A-Za-z0-9]+)")
+# The exact <shreddit-post> start tag; the lookahead keeps it off
+# <shreddit-post-overflow-menu> and friends, same trick as _COMMENT_TAG.
+_POST_CARD = re.compile(r"<shreddit-post(?=[\s>])[^>]*>")
+
+
+# Bare GET returning text. Reddit 403s the default urllib agent, so every
+# request here wears a browser UA, and 429s bursts, so calls are paced and
+# retried. None on any failure -- one dead feed must never sink the run.
+_last_request = [0.0]
+
+
+def http_text(url, accept="*/*"):
+    for attempt in range(REDDIT_RETRIES + 1):
+        gap = REDDIT_PACE - (time.monotonic() - _last_request[0])
+        if gap > 0:
+            time.sleep(gap)
+        _last_request[0] = time.monotonic()
+        try:
+            request = urllib.request.Request(
+                url, headers={"User-Agent": BROWSER_UA, "Accept": accept})
+            with urllib.request.urlopen(request, timeout=REDDIT_TIMEOUT) as response:
+                return response.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as err:
+            if err.code == 429 and attempt < REDDIT_RETRIES:
+                time.sleep(REDDIT_PACE * (attempt + 2))  # back off, then retry
+                continue
+            sys.stderr.write(f"reddit fetch failed :: HTTP {err.code} :: {url[:100]}\n")
+            return None
+        except Exception as err:  # timeout, DNS, malformed response
+            sys.stderr.write(f"reddit fetch failed :: {url[:100]} :: {err}\n")
+            return None
+    return None
+
+
+# The query's meaningful words -- stopwords and one/two-letter noise dropped.
+def query_terms(query):
+    return {w for w in re.findall(r"[a-z0-9]+", (query or "").lower())
+            if w not in STOPWORDS and len(w) > 2}
+
+
+# Fraction of the query's meaningful words present in the title/body. Cheap,
+# but enough to keep an off-topic viral post out of the brief.
+def relevance(query, text):
+    terms = query_terms(query)
+    if not terms:
+        return 1.0  # no query = watchlist mode, nothing to be irrelevant to
+    words = set(re.findall(r"[a-z0-9]+", (text or "").lower()))
+    return sum(1 for t in terms if t in words) / len(terms)
+
+
+# The feeds RSS discovery fans out across: global search, per-sub search, and
+# per-sub top/hot listings for volume.
+def reddit_feeds(query, subs, days):
+    window = "week" if days <= 7 else "month"
+    quoted = urllib.parse.quote_plus(query) if query else ""
+    urls = []
+    if query:
+        urls.append(f"https://www.reddit.com/search.rss?q={quoted}&sort=relevance&t={window}")
+    for sub in subs:
+        if query:
+            urls.append(f"https://www.reddit.com/r/{sub}/search.rss"
+                        f"?q={quoted}&restrict_sr=on&sort=relevance&t={window}")
+        for sort in ("top", "hot"):
+            urls.append(f"https://www.reddit.com/r/{sub}/{sort}.rss?t={window}")
+    return urls
+
+
+# Atom feed -> post dicts. RSS carries no engagement, so upvotes/comments are
+# backfilled from arctic-shift later.
+def parse_feed(xml_text):
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as err:
+        sys.stderr.write(f"reddit feed parse error :: {err}\n")
+        return []
+
+    posts = []
+    for entry in root.iter(f"{ATOM}entry"):
+        def text_of(path):
+            node = entry.find(path)
+            return (node.text or "").strip() if node is not None else ""
+
+        link = entry.find(f"{ATOM}link")
+        url = (link.get("href") or "").strip() if link is not None else ""
+        if "/comments/" not in url:
+            continue
+
+        author = text_of(f"{ATOM}author/{ATOM}name").lstrip("/").removeprefix("u/")
+        category = entry.find(f"{ATOM}category")
+        sub = category.get("term", "").strip() if category is not None else ""
+        if not sub and "/r/" in url:
+            sub = url.split("/r/", 1)[1].split("/", 1)[0]
+
+        body = _WS.sub(" ", _TAG.sub(" ", text_of(f"{ATOM}content"))).strip()[:600]
+
+        posts.append({
+            "entity": f"r/{sub}",
+            "author": author if author not in ("", "[deleted]") else "[deleted]",
+            "title": text_of(f"{ATOM}title"),
+            "text": html.unescape(body),
+            "url": url,
+            "date": text_of(f"{ATOM}updated") or None,
+            "subreddit": sub,
+        })
+    return posts
+
+
+# One <shreddit-post> start tag -> a post dict shaped like parse_feed's, so the
+# two discovery sources can be merged without special-casing either. The card
+# carries no body text (RSS does), but it does carry the live score.
+def parse_listing(page, sub):
+    posts = []
+    for found in _POST_CARD.finditer(page or ""):
+        tag = found.group(0)
+
+        def attr(name):
+            hit = re.search(rf'\b{name}="([^"]*)"', tag)
+            return html.unescape(hit.group(1)) if hit else ""
+
+        permalink = attr("permalink")
+        if "/comments/" not in permalink:
+            continue
+        try:
+            upvotes = int(attr("score") or 0)
+        except ValueError:
+            upvotes = 0
+        try:
+            comments = int(attr("comment-count") or 0)
+        except ValueError:
+            comments = 0
+
+        author = attr("author") or "[deleted]"
+        posts.append({
+            "entity": f"r/{attr('subreddit-name') or sub}",
+            "author": author if author not in ("[deleted]", "[removed]") else "[deleted]",
+            "title": attr("post-title"),
+            "text": "",
+            "url": f"https://www.reddit.com{permalink}",
+            "date": attr("created-timestamp") or None,
+            "subreddit": attr("subreddit-name") or sub,
+            # Live, unlike arctic's archive snapshot -- flagged so the merge
+            # knows this number outranks anything arctic returns for the id.
+            "live_upvotes": upvotes,
+            "live_comments": comments,
+        })
+    return posts
+
+
+# Scored discovery across the watchlist subs. One request per sub x sort, paced
+# by http_text like every other reddit.com call -- the 429 that pacing exists to
+# avoid would cost more than the parallelism would save.
+def listing_posts(subs, sorts=LISTING_SORTS, days=7):
+    window = "week" if days <= 7 else "month"
+    posts = []
+    for sub in subs:
+        for sort in sorts:
+            url = LISTING_URL.format(sort=sort, sub=sub)
+            if sort == "top":
+                url += f"&t={window}"
+            found = parse_listing(http_text(url, accept="text/html") or "", sub)
+            if not found:
+                sys.stderr.write(f"no listing cards :: r/{sub} {sort}\n")
+            posts.extend(found)
+    return posts
+
+
+# Point-in-time upvote/comment counts for a batch of base36 post ids. Arctic is
+# a public archive, so counts lag live by a little -- fine for ranking.
+def arctic_scores(post_ids):
+    scores = {}
+    for start in range(0, len(post_ids), ARCTIC_BATCH):
+        batch = post_ids[start:start + ARCTIC_BATCH]
+        raw = http_text(f"{ARCTIC_URL}?ids={','.join(batch)}")
+        if not raw:
+            break  # rate-limited or unreachable; keep what we already have
+        try:
+            rows = json.loads(raw).get("data")
+        except (json.JSONDecodeError, AttributeError):
+            break
+        if not isinstance(rows, list):
+            sys.stderr.write("arctic-shift returned no data (rate-limited?)\n")
+            break
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            post_id = str(row.get("id") or "").removeprefix("t3_")
+            if post_id:
+                scores[post_id] = {"upvotes": int(row.get("score") or 0),
+                                   "comments": int(row.get("num_comments") or 0)}
+    return scores
+
+
+# One comment's body, anchored on its own thingId so a nested reply is never
+# attributed to its parent. The slice stops at the next comment's anchor.
+def comment_body(page, thing_id):
+    anchor = f'id="{thing_id}-post-rtjson-content"'
+    start = page.find(anchor)
+    if start == -1:
+        return ""
+    window = page[start + len(anchor):start + len(anchor) + 8000]
+    following = _NEXT_BODY.search(window)
+    if following:
+        window = window[:following.start()]
+    text = " ".join(_TAG.sub("", p) for p in _PARA.findall(window))
+    return _WS.sub(" ", html.unescape(text)).strip()
+
+
+# Top comments for one thread, from the shreddit partial. [] on any failure.
+def fetch_comments(url):
+    match = _POST_REF.search(url)
+    if not match:
+        return []
+    page = http_text(SHREDDIT_URL.format(sub=match.group(1), post_id=match.group(2)),
+                     accept="text/html")
+    if not page:
+        return []
+
+    comments = []
+    for found in _COMMENT_TAG.finditer(page):
+        tag = found.group(0)
+
+        def attr(name):
+            hit = re.search(rf'\b{name}="([^"]*)"', tag)
+            return html.unescape(hit.group(1)) if hit else ""
+
+        author = attr("author") or "[deleted]"
+        body = comment_body(page, attr("thingId"))
+        if author in ("[deleted]", "[removed]") or not body:
+            continue
+        try:
+            score = int(attr("score") or 0)
+        except ValueError:
+            score = 0
+        permalink = attr("permalink")
+        comments.append({"author": author, "score": score, "text": body[:300],
+                         "url": f"https://reddit.com{permalink}" if permalink else url})
+
+    comments.sort(key=lambda comment: comment["score"], reverse=True)
+    return comments[:MAX_COMMENTS]
+
+
+# Full Reddit run: RSS discovery -> arctic scores -> relevance floor -> top
+# comments on the leaders.
+def run_reddit(args, entries):
+    subs = []
+    for entry in entries:
+        sub = entry["handle"].strip().lstrip("/").removeprefix("r/").rstrip("/")
+        if re.fullmatch(r"[A-Za-z0-9_]{2,21}", sub):
+            subs.append(sub)
+        else:
+            sys.stderr.write(f"skipping (not a subreddit) :: {entry['handle'][:80]}\n")
+
+    if not subs and not args.query:
+        return emit("reddit", []) or sys.stderr.write(
+            f"Nothing under '## Reddit' in {WATCHLIST}, and no -q given.\n")
+
+    feeds = reddit_feeds(args.query, subs, args.days)
+    if args.dry_run:
+        return print(json.dumps({"source": "reddit", "dry_run": True, "cost": "free",
+                                 "feeds": len(feeds),
+                                 "listing_requests": len(subs) * len(LISTING_SORTS),
+                                 "query": args.query,
+                                 "watching": [f"r/{s}" for s in subs]},
+                                indent=2, ensure_ascii=False))
+
+    posts, seen = [], set()
+    for feed in feeds:
+        for post in parse_feed(http_text(feed, accept="application/atom+xml") or ""):
+            if post["url"] in seen or not in_window(post["date"], args.days):
+                continue
+            seen.add(post["url"])
+            posts.append(post)
+    # Scored discovery, merged into the RSS pool. On a URL collision the RSS
+    # post wins the body text (listings carry none) but inherits the live
+    # score, so neither source loses what only it has.
+    by_url = {p["url"]: p for p in posts}
+    listing_new = 0
+    for found in listing_posts(subs, days=args.days):
+        if not in_window(found["date"], args.days):
+            continue
+        existing = by_url.get(found["url"])
+        if existing:
+            existing["live_upvotes"] = found["live_upvotes"]
+            existing["live_comments"] = found["live_comments"]
+        else:
+            by_url[found["url"]] = found
+            posts.append(found)
+            listing_new += 1
+    scored_now = sum(1 for p in posts if p.get("live_upvotes") is not None)
+    sys.stderr.write(f"listings added {listing_new} post(s) not in RSS; "
+                     f"{scored_now} post(s) carry a live score\n")
+
+    live = {p["subreddit"].lower() for p in posts}
+    sys.stderr.write(f"{len(posts)} post(s) discovered across {len(feeds)} feed(s), "
+                     f"{len(live)} subreddit(s)\n")
+    # A subreddit that was asked for but returned nothing was throttled or is
+    # unreachable -- never report that silence as a quiet week.
+    missing = sorted({s.lower() for s in subs} - live)
+    if missing:
+        sys.stderr.write(f"no posts from {', '.join('r/' + s for s in missing)} "
+                         f"(rate-limited or unreachable, not necessarily quiet)\n")
+    if not posts:
+        return emit("reddit", [])
+
+    # A viral off-topic post would otherwise hijack the brief, so anything
+    # sharing too few words with the query is cut before ranking.
+    if args.query:
+        for post in posts:
+            post["relevance"] = round(
+                relevance(args.query, f"{post['title']} {post['text']}"), 2)
+        floor = relevance_floor(args.query)
+        kept = [p for p in posts if p["relevance"] >= floor]
+        sys.stderr.write(f"{len(posts) - len(kept)} of {len(posts)} post(s) cut "
+                         f"below relevance floor {round(floor, 2)}\n")
+        if not kept:
+            # "Nothing found" and "found things, none on topic" are different
+            # answers; the caller must be able to tell them apart and retry
+            # with a looser query rather than report a quiet week.
+            best = max((p["relevance"] for p in posts), default=0.0)
+            sys.stderr.write(f"nothing cleared the floor (best was {best}); "
+                             f"try a shorter or broader -q\n")
+            return emit("reddit", [], {"filtered_out": len(posts),
+                                       "best_relevance": best})
+        posts = kept
+
+    ids = [_POST_REF.search(p["url"]).group(2) for p in posts]
+    # Arctic is only asked about posts the listing could not score -- it stays
+    # the fallback for RSS-only finds (and for every post if the listing markup
+    # ever changes), but it no longer overwrites a live number with a stale one.
+    unscored = [pid for post, pid in zip(posts, ids)
+                if post.get("live_upvotes") is None]
+    scores = arctic_scores(unscored) if unscored else {}
+    if unscored and not scores:
+        sys.stderr.write("no scores from arctic-shift; "
+                         "unscored posts ordered by recency\n")
+    for post, post_id in zip(posts, ids):
+        if post.get("live_upvotes") is not None:
+            post["upvotes"] = post["live_upvotes"]
+            post["comments"] = post["live_comments"]
+            post["score_source"] = "listing (live)"
+        else:
+            found = scores.get(post_id)
+            # None, not 0: an unscored post is unknown, not a flop.
+            post["upvotes"] = found["upvotes"] if found else None
+            post["comments"] = found["comments"] if found else None
+            post["score_source"] = "arctic (archived)" if found else None
+        post.pop("live_upvotes", None)
+        post.pop("live_comments", None)
+        post["engagement"] = ((post["upvotes"] or 0) + (post["comments"] or 0)
+                              if post["upvotes"] is not None else None)
+
+    posts.sort(key=lambda p: (p["engagement"] is not None, p["engagement"] or 0,
+                              p["date"] or ""), reverse=True)
+    posts = posts[:args.limit]
+
+    # Comments cost one request each, so only the leaders get them.
+    for post in posts[:args.enrich]:
+        post["top_comments"] = fetch_comments(post["url"])
+        # Arctic scores are archive snapshots taken near posting time; comment
+        # scores are live. On a thread that took off after archiving, the post
+        # reads as under-scored -- a top comment can outscore its own post 2:1,
+        # which makes the ranking look broken. The post is worth at least its
+        # best comment, so raise the floor and say the number is a minimum.
+        # A listing score is already live, so it needs no such correction --
+        # applying one there would relabel a true number as a lagging estimate.
+        top = max((c["score"] for c in post["top_comments"]), default=0)
+        if (post["score_source"] == "arctic (archived)"
+                and post["upvotes"] is not None and top > post["upvotes"]):
+            post["upvotes_stale"] = post["upvotes"]
+            post["upvotes"] = top
+            post["engagement"] = top + (post["comments"] or 0)
+            post["score_note"] = "minimum: archive snapshot lagged live comments"
+    # Corrected scores can reorder the leaders, so sort again before emitting.
+    posts.sort(key=lambda p: (p["engagement"] is not None, p["engagement"] or 0,
+                              p["date"] or ""), reverse=True)
+    sys.stderr.write(f"enriched {min(args.enrich, len(posts))} post(s) with comments\n")
+
+    emit("reddit", posts)
+
+
 # Parses flags and hands off to the chosen source.
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--source", choices=("linkedin", "x"), required=True)
+    parser.add_argument("--source", choices=("linkedin", "x", "reddit"), required=True)
     parser.add_argument("-d", "--days", type=int, default=7)
     parser.add_argument("-n", "--limit", type=int, default=25)
-    parser.add_argument("-q", "--query", help="X only: free-text topic research")
+    parser.add_argument("-q", "--query", help="X and Reddit: free-text topic research")
     parser.add_argument("--per-source", type=int, default=10,
                         help="LinkedIn only: max posts per watchlist line (this is the bill)")
+    parser.add_argument("--enrich", type=int, default=5,
+                        help="Reddit only: how many top posts get their comments fetched")
     parser.add_argument("--model", default=XAI_MODEL, help=f"X only (default {XAI_MODEL})")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -414,8 +861,12 @@ def main():
     load_env()
     if args.source == "linkedin":
         if args.query:
-            raise SystemExit("-q is X only; LinkedIn reads the watchlist.")
+            raise SystemExit("-q is X and Reddit only; LinkedIn reads the watchlist.")
         run_linkedin(args, read_watchlist("LinkedIn"))
+    elif args.source == "reddit":
+        # In query mode a missing watchlist must not be fatal.
+        entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("Reddit")
+        run_reddit(args, entries)
     else:
         # In query mode a missing watchlist must not be fatal.
         entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("X")
