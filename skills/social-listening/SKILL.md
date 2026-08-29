@@ -1,6 +1,6 @@
 ---
 name: social-listening
-description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, and YouTube. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals — the posts most relevant to the user's business, most recent first — with brief analysis; a full table of every post is offered on request. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish".
+description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, YouTube, and the open web. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals — the posts most relevant to the user's business, most recent first — with brief analysis; a full table of every post is offered on request. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish", "what is the web saying about [topic]", "search the web for [topic]".
 ---
 
 # Social Listening
@@ -23,9 +23,10 @@ One script, `scripts/signals/social-listening.py`, with `--source`:
 | `x` | one API call per run, `-n` is ~free | `X_API_KEY` |
 | `reddit` | free — no key, no credits | nothing |
 | `youtube` | free — no key, no credits | `yt-dlp` installed |
+| `web` | free keyless, or one API call per query | nothing, or a search key |
 
 Who to watch: `context/signals/watchlist.md`, under `## LinkedIn` / `## X` /
-`## Reddit` / `## YouTube`.
+`## Reddit` / `## YouTube` / `## Web`.
 What counts as a signal: `context/signals/signals.md` if it exists — use it to
 judge relevance and ordering. If missing, use judgement and say once that
 filling it in sharpens future runs.
@@ -39,8 +40,13 @@ alone, or on a topic question). Say how many entities each watches.
 
 Skip the question when the user named the source ("check LinkedIn", "check
 Reddit"). A topic question with no source named is query mode — ask whether to
-run it on X, Reddit, or YouTube (or several), since all three answer it and
-Reddit and YouTube are free.
+run it on X, Reddit, YouTube, or the Web (or several), since all four answer it
+and Reddit, YouTube and keyless Web are free.
+
+Web qualifies for the question on entries alone or on a topic question, like
+Reddit — it needs no key, since the keyless floor always works. When Web is
+chosen for a topic question and you have a native web search tool, use that tool
+rather than the script; see the Web notes in Step 2.
 
 When Reddit is one of the chosen sources, also settle **what** it watches before
 running: a topic/keyword/brand (`-q`) or the watchlist subreddits (no `-q`).
@@ -58,11 +64,13 @@ python scripts/signals/social-listening.py --source reddit -d 7 -n 25 --enrich 5
 python scripts/signals/social-listening.py --source reddit -q "linkedin ghostwriting pricing"
 python scripts/signals/social-listening.py --source youtube -d 30 -n 15 --per-source 8 --enrich 3
 python scripts/signals/social-listening.py --source youtube -q "linkedin ghostwriting" --enrich 3
+python scripts/signals/social-listening.py --source web -q "linkedin ghostwriting pricing" -d 30
+python scripts/signals/social-listening.py --source web -d 30 --per-source 5
 ```
 
 All print `{"source","count","signals":[...]}` to stdout, **already sorted — by
 engagement (highest first) on LinkedIn, X and Reddit, and by date (newest
-first) on YouTube**. Per-entity notes go to stderr. The JSON is for you;
+first) on YouTube and Web**. Per-entity notes go to stderr. The JSON is for you;
 never paste it into chat. Sources are independent — run them in parallel.
 
 **LinkedIn** — `--per-source` (default 10) caps posts per watchlist line; one run
@@ -119,6 +127,53 @@ It is never a sum: views dwarf likes by orders of magnitude, so adding them
 would change nothing but the number's meaning. `views`, `likes` and `comments`
 are all still reported separately, and a `null` means the count was hidden, not
 zero.
+
+**Web — try your own search tool first.** This source is a ladder of three
+rungs, and the script is only the bottom two:
+
+1. **Your own web search tool**, if this harness gives you one. It is faster
+   than a subprocess, costs no API credits, and returns better-synthesised
+   results. Use it for any open-web topic question.
+2. **A keyed backend** — Brave, EXA, Serper or Parallel, whichever key is in
+   `.env`, picked automatically in that order.
+3. **The keyless floor** — DuckDuckGo HTML, then Startpage. Free, no account.
+   This is what runs when no key is set, and it always works.
+
+So: **for a topic question, search with your own tool if you have one** and
+report the results in the Part 1 format below, exactly as if the script had
+produced them. Only run the script when you have no native search tool, when
+the user explicitly asks to run the source, or when the run is watchlist-based.
+
+**Watchlist runs always use the script**, whatever tools you have. Monitoring
+the `## Web` domains means one `site:domain.com` query per line, which native
+search handles poorly and the script does precisely. `-q` with a populated
+`## Web` section narrows the topic to those domains rather than searching the
+open web — the same combining rule X uses.
+
+`--per-source` (default 10) caps results per query; `-n` caps the merged run.
+`--web-backend` forces a specific rung (`keyless` to skip a paid key you have,
+`brave`/`exa`/`serper`/`parallel` to pin one), and errors out if that key is
+missing rather than silently falling back. `--dry-run` prints the backend and
+the exact queries without spending a call — worth doing before a long
+`## Web` section on a keyed backend, since each line is one call.
+
+**Web is ranked by date, newest first**, like YouTube and for the same reason:
+the open web reports no engagement, and a page that ranks well may be years
+old. `engagement` is always `null` here — never write it as `0`, and never
+merge Web rows into an engagement-sorted table as though they scored zero.
+
+**The keyless floor returns no dates at all.** DuckDuckGo and Startpage do not
+publish them, so keyless results carry `date: null`, sort last, and cannot be
+windowed — `-d` silently does nothing on that rung. Say so when reporting a
+keyless run: "these results have no publication date, so recency is unverified"
+is honest; presenting them as this week's news is not. A keyed backend (EXA
+included, which you have) does return real dates and does respect `-d`, so
+prefer one when the question is about recency.
+
+Pass keywords, not the user's sentence, exactly as with Reddit and YouTube —
+the same relevance floor applies to `-q` results. Results from a watched
+`## Web` domain are exempt from that floor, since a domain the user chose to
+watch is on topic by definition.
 
 **Reddit has two modes — pick one deliberately, they answer different
 questions.**
@@ -289,12 +344,13 @@ Columns, in this order:
   is the channel. When they differ
   (a repost surfaced through a watched profile), use the real author and note the
   watchlist line it came from in the summary.
-- **Src** — `LI`, `X`, `RD`, or `YT`.
+- **Src** — `LI`, `X`, `RD`, `YT`, or `WB`.
 - **Eng** — the `engagement` number, plain digits. A **null** means the count was
   unknown, not zero — write `?`, never `0`.
 - **Breakdown** — `<likes>/<reposts>/<replies>` on X,
   `<reactions>/<comments>/<shares>` on LinkedIn, `<upvotes>/<comments>` on
   Reddit, `<views>/<likes>/<comments>` on YouTube, slash-separated, digits only.
+  Web has no counts at all — write `—`, not `?` or `0`.
 - **Summary** — 1-2 sentences on what the post says. Keep it to roughly 200
   characters so the row stays readable; the table is the deliverable, so trade
   detail for scannability here rather than letting one cell dominate.

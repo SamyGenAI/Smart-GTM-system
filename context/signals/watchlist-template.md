@@ -38,6 +38,16 @@ Some Roundup: https://example.com/newsletter
 
 ## Web
 
+> Read by `scripts/signals/social-listening.py --source web`.
+> Free on the keyless floor (DuckDuckGo/Startpage); uses Brave, Exa, Serper or
+> Parallel instead when the matching key is in `.env`. Ranked by date, newest
+> first — the open web has no engagement count.
+>
+> One domain per line as `Name: domain.com`. Each becomes a `site:` query, so
+> the run surfaces what that competitor published. `-q` searches the open web
+> instead, and narrows to these domains when both are given.
+
+
 Acme Corp: https://acme.com
 
 ## Companies

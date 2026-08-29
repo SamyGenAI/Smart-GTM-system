@@ -22,6 +22,7 @@ Core offer: [e.g. premium content + qualified founder conversations]
 - **Apify (`supreme_coder/linkedin-post`)**: LinkedIn post listening (bills per post)
 - **xAI Grok (`x_search`)**: X/Twitter listening + free-text X research
 - **yt-dlp**: YouTube listening — search, channels, transcripts, comments (free, keyless)
+- **Web search**: harness-native search first, then Brave/EXA/Serper/Parallel by key, then keyless DuckDuckGo/Startpage
 - **Python (stdlib only)**: signal watching scripts in `scripts/signals/`
 
 ## Workflow
@@ -64,6 +65,8 @@ Read skills/social-listening/SKILL.md and check Reddit for what people say about
 
 Read skills/social-listening/SKILL.md and check YouTube for what people say about [topic]
 
+Read skills/social-listening/SKILL.md and check the web for what people say about [topic]
+
 Read skills/intent-signals/SKILL.md and check buying signals for my watchlist
 ```
 
@@ -73,7 +76,7 @@ Two separate context files, copied from their `-template.md` siblings:
 
 - `context/signals/watchlist.md` — WHO to watch. One line per entity,
   `Name: handle`, grouped by platform. Reddit is just `r/subreddit`; YouTube
-  takes `Name: @handle` or a channel URL.
+  takes `Name: @handle` or a channel URL; Web takes `Name: domain.com`.
   Read directly by the scripts.
 - `context/signals/signals.md` — WHAT counts as a signal and how to rank it.
   Read by the skills, not the scripts. Optional but sharpens results.
@@ -82,11 +85,17 @@ Listening runs from one script, `scripts/signals/social-listening.py`,
 with `--source linkedin` (Apify, bills per post), `--source x` (xAI Grok
 `x_search`, one call per run), `--source reddit` (keyless RSS + arctic-shift
 scores + shreddit comments; free, but paced ~2s per request so a multi-subreddit
-run takes a couple of minutes), or `--source youtube` (yt-dlp; free and keyless,
+run takes a couple of minutes), `--source youtube` (yt-dlp; free and keyless,
 but needs `pip install yt-dlp` — searches topics or watched channels and pulls
-transcripts + top comments). The first three return real engagement counts and
-sort by them; **YouTube sorts by date, newest first**, since an old video with
-high views is not a signal. Intent sources live in `scripts/signals/intent/`.
+transcripts + top comments), or `--source web` (Brave/EXA/Serper/Parallel when
+a key is set, else a free keyless DuckDuckGo/Startpage floor). The first three
+return real engagement counts and sort by them; **YouTube and Web sort by date,
+newest first**, since an old video or page is not a signal.
+Intent sources live in `scripts/signals/intent/`.
+
+The web source is the bottom two rungs of a three-rung ladder: the agent's own
+web search tool comes first when it has one, since a script cannot call it.
+See `skills/social-listening/SKILL.md`.
 
 Both skills ALWAYS ask which sources to run before running anything. They
 never run every source by default, and they report conversationally in chat

@@ -4,6 +4,7 @@
 --source x         xAI Grok x_search, one call per run; -q for topic research.
 --source reddit    keyless RSS + arctic-shift + shreddit; free, no API key.
 --source youtube   yt-dlp; free, no API key. Transcripts + comments, newest first.
+--source web       Brave/Exa/Serper/Parallel if a key is set, else keyless DDG/Startpage.
 
 Prints JSON to stdout. Run from the repo root.
 """
@@ -1268,22 +1269,369 @@ def run_youtube(args, entries):
     emit("youtube", signals)
 
 
+# --- Web ----------------------------------------------------------------------
+#
+# Tier 3 of the ladder in skills/social-listening. Tier 1 is the agent's own web
+# search tool, which a script cannot call; this file owns tiers 2 and 3:
+#
+#   keyed backends   BRAVE -> EXA -> SERPER -> PARALLEL, first key found wins
+#   keyless floor    DuckDuckGo HTML -> Startpage HTML, no key, no account
+#
+# Unlike the other sources the open web reports no engagement, so results are
+# ranked by date, newest first, same as YouTube -- an old page ranking well is
+# not a signal.
+
+WEB_TIMEOUT = 20
+# Ladder order: whichever key is present first is used. Brave leads because its
+# freshness filter is a real date range rather than a re-ranked relevance sort.
+WEB_BACKENDS = (("brave", "BRAVE_API_KEY"), ("exa", "EXA_API_KEY"),
+                ("serper", "SERPER_API_KEY"), ("parallel", "PARALLEL_API_KEY"))
+
+DDG_HTML_URL = "https://html.duckduckgo.com/html/"
+STARTPAGE_URL = "https://www.startpage.com/sp/search"
+
+# Strip <style>/<script> with their contents before dropping tags, or inline CSS
+# leaks into a title. Startpage's class names carry hashed suffixes, so the
+# patterns match on the stable "result-title"/"description" substrings.
+_STYLE_SCRIPT = re.compile(r"<(style|script)\b[^>]*>.*?</\1>", re.I | re.DOTALL)
+_DDG_RESULT = re.compile(
+    r'class="result__a"[^>]*href="(?P<href>[^"]+)"[^>]*>(?P<title>.*?)</a>', re.I | re.DOTALL)
+_DDG_SNIPPET = re.compile(r'class="result__snippet"[^>]*>(?P<snippet>.*?)</a>', re.I | re.DOTALL)
+_SP_RESULT = re.compile(
+    r'<a\b[^>]*class="[^"]*result-title[^"]*"[^>]*href="(?P<href>https?://[^"]+)"[^>]*>'
+    r'(?P<inner>.*?)</a>', re.I | re.DOTALL)
+_SP_H2 = re.compile(r"<h2\b[^>]*>(?P<title>.*?)</h2>", re.I | re.DOTALL)
+_SP_DESC = re.compile(r'<p\b[^>]*class="[^"]*description[^"]*"[^>]*>(?P<snippet>.*?)</p>',
+                      re.I | re.DOTALL)
+
+
+# Markup fragment -> plain text.
+def strip_html(fragment):
+    return _WS.sub(" ", html.unescape(_TAG.sub("", _STYLE_SCRIPT.sub("", fragment or "")))).strip()
+
+
+# Any date shape a search API returns -> YYYY-MM-DD, or None. Serper answers in
+# prose ("Mar 4, 2026") and relative form ("3 days ago"); the rest use ISO.
+def web_date(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    relative = re.fullmatch(r"(\d+)\s+(hour|day|week|month|year)s?\s+ago", raw, re.I)
+    if relative:
+        count = int(relative.group(1))
+        days = {"hour": count / 24, "day": count, "week": count * 7,
+                "month": count * 30, "year": count * 365}[relative.group(2).lower()]
+        return (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+    iso = re.match(r"(\d{4}-\d{2}-\d{2})", raw)
+    if iso:
+        return iso.group(1)
+    for fmt in ("%b %d, %Y", "%B %d, %Y", "%d %b %Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def web_domain(url):
+    return urllib.parse.urlparse(url or "").netloc.strip().lower().removeprefix("www.")
+
+
+# One normalised result. Shared by every backend so the emitted shape never
+# depends on which one ran.
+def web_item(entity, title, url, snippet, date, backend):
+    domain = web_domain(url)
+    return {
+        "entity": entity or domain,
+        # True when this came from a site: query for a watchlist domain, which
+        # exempts it from the relevance floor below.
+        "watched": entity is not None,
+        "author": domain,
+        "author_url": f"https://{domain}" if domain else None,
+        "title": strip_html(title)[:300],
+        "text": strip_html(snippet)[:800],
+        "url": url,
+        "date": date,
+        "source_domain": domain,
+        "backend": backend,
+        # The open web reports no engagement. null, not 0 -- 0 would claim the
+        # page flopped, which is a different claim from there being no counter.
+        "engagement": None,
+    }
+
+
+# GET returning text, browser UA. None on any failure -- one dead backend must
+# never sink the run.
+def web_text(url, headers=None):
+    try:
+        request = urllib.request.Request(
+            url, headers={"User-Agent": BROWSER_UA, "Accept": "text/html", **(headers or {})})
+        with urllib.request.urlopen(request, timeout=WEB_TIMEOUT) as response:
+            return response.read().decode("utf-8", "replace")
+    except Exception as err:
+        sys.stderr.write(f"web fetch failed :: {url[:100]} :: {err}\n")
+        return None
+
+
+# GET/POST returning parsed JSON, or None. Same contract as web_text.
+def web_json(url, headers, body=None):
+    try:
+        data = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(
+            url, data=data,
+            headers={"Content-Type": "application/json", "Accept": "application/json",
+                     **headers})
+        with urllib.request.urlopen(request, timeout=WEB_TIMEOUT) as response:
+            return json.loads(response.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode("utf-8", "replace")[:200]
+        sys.stderr.write(f"web API HTTP {err.code} :: {url[:60]} :: {detail}\n")
+    except Exception as err:
+        sys.stderr.write(f"web API failed :: {url[:60]} :: {err}\n")
+    return None
+
+
+# --- keyed backends ---
+
+
+def search_brave(query, entity, since, today, count, key):
+    url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode(
+        {"q": query, "count": count, "freshness": f"{since}to{today}"})
+    data = web_json(url, {"X-Subscription-Token": key}) or {}
+    return [web_item(entity, r.get("title"), r.get("url"), r.get("description"),
+                     web_date(r.get("page_age")), "brave")
+            for r in (data.get("web") or {}).get("results", [])[:count] if r.get("url")]
+
+
+def search_exa(query, entity, since, today, count, key):
+    data = web_json("https://api.exa.ai/search", {"x-api-key": key}, {
+        "query": query, "type": "auto", "numResults": count,
+        "startPublishedDate": f"{since}T00:00:00.000Z",
+        "endPublishedDate": f"{today}T23:59:59.999Z",
+        "contents": {"text": {"maxCharacters": 1000}},
+    }) or {}
+    return [web_item(entity, r.get("title"), r.get("url"), r.get("text"),
+                     web_date(r.get("publishedDate")), "exa")
+            for r in data.get("results", [])[:count] if isinstance(r, dict) and r.get("url")]
+
+
+def search_serper(query, entity, since, today, count, key):
+    def slashed(iso):
+        year, month, day = iso.split("-")
+        return f"{month}/{day}/{year}"
+    data = web_json("https://google.serper.dev/search", {"X-API-KEY": key}, {
+        "q": query, "num": count,
+        "tbs": f"cdr:1,cd_min:{slashed(since)},cd_max:{slashed(today)}",
+    }) or {}
+    return [web_item(entity, r.get("title"), r.get("link"), r.get("snippet"),
+                     web_date(r.get("date")), "serper")
+            for r in data.get("organic", [])[:count] if r.get("link")]
+
+
+def search_parallel(query, entity, since, today, count, key):
+    data = web_json("https://api.parallel.ai/v1/search",
+                    {"Authorization": f"Bearer {key}"},
+                    {"search_queries": [query],
+                     "advanced_settings": {"max_results": count}}) or {}
+    items = []
+    for r in data.get("results", [])[:count]:
+        if not isinstance(r, dict) or not r.get("url"):
+            continue
+        excerpt = (r.get("excerpts") or [""])[0] or ""
+        items.append(web_item(entity, r.get("title"), r.get("url"), excerpt,
+                              web_date(r.get("publish_date")), "parallel"))
+    return items
+
+
+# --- keyless floor ---
+
+
+# DuckDuckGo wraps results as //duckduckgo.com/l/?uddg=<encoded target>.
+def unwrap_ddg(href):
+    if "uddg=" not in href:
+        return href if href.startswith("http") else (
+            f"https:{href}" if href.startswith("//") else "")
+    try:
+        query = urllib.parse.urlparse(
+            href if href.startswith("http") else f"https:{href}").query
+        return urllib.parse.parse_qs(query).get("uddg", [""])[0]
+    except ValueError:
+        return ""
+
+
+def search_ddg(query, entity, count):
+    text = web_text(f"{DDG_HTML_URL}?{urllib.parse.urlencode({'q': query})}")
+    if not text:
+        return []
+    items = []
+    # Snippets are matched inside each result's own window, not zipped: some
+    # anchors (news/video modules) carry no snippet, and a global zip would
+    # shift every later snippet onto the wrong result.
+    matches = list(_DDG_RESULT.finditer(text))
+    for index, match in enumerate(matches):
+        if len(items) >= count:
+            break
+        target = unwrap_ddg(match.group("href"))
+        if not target.startswith("http"):
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        snippet = _DDG_SNIPPET.search(text[match.end():end])
+        items.append(web_item(entity, match.group("title"), target,
+                              snippet.group("snippet") if snippet else "", None, "duckduckgo"))
+    return items
+
+
+# Rung 2. DuckDuckGo answers a datacenter IP with a 202 challenge page and no
+# results; Startpage still serves organic hits to a plain browser UA, so it is
+# the working floor wherever DuckDuckGo refuses.
+def search_startpage(query, entity, count):
+    text = web_text(f"{STARTPAGE_URL}?{urllib.parse.urlencode({'query': query})}")
+    if not text:
+        return []
+    items, descriptions = [], list(_SP_DESC.finditer(text))
+    for match in _SP_RESULT.finditer(text):
+        if len(items) >= count:
+            break
+        target = html.unescape(match.group("href"))
+        heading = _SP_H2.search(match.group("inner"))
+        title = strip_html(heading.group("title") if heading else match.group("inner"))
+        if not target.startswith("http") or not title:
+            continue
+        snippet = next((d.group("snippet") for d in descriptions if d.start() > match.end()), "")
+        items.append(web_item(entity, title, target, snippet, None, "startpage"))
+    return items
+
+
+# Picks the backend once per run -> (name, key). Keyed backends win in ladder
+# order; the keyless floor is what is left when no key is set.
+def web_backend(requested):
+    for name, key_var in WEB_BACKENDS:
+        if requested in (name, "auto") and os.environ.get(key_var):
+            return name, os.environ[key_var]
+        if requested == name:
+            raise SystemExit(f"--web-backend {name} needs {key_var} in .env.")
+    return "keyless", None
+
+
+# One query against the chosen backend. The keyless floor tries DuckDuckGo, then
+# Startpage; keyed backends get no fallback, since a failing key is worth seeing.
+def web_search(query, entity, backend, key, since, today, count):
+    if backend == "keyless":
+        return search_ddg(query, entity, count) or search_startpage(query, entity, count)
+    runner = {"brave": search_brave, "exa": search_exa,
+              "serper": search_serper, "parallel": search_parallel}[backend]
+    return runner(query, entity, since, today, count, key)
+
+
+# Full web run: build queries, search each, dedupe by URL, sort by date, print.
+def run_web(args, entries):
+    today = datetime.now(timezone.utc).date()
+    since = today - timedelta(days=args.days)
+    backend, key = web_backend(args.web_backend)
+
+    # A watchlist line is a domain to monitor: "Name: taplio.com" becomes a
+    # site: query, so the run surfaces what that competitor published. -q
+    # searches the open web, and the two combine when both are given.
+    targets = []
+    if args.query:
+        targets.append({"query": args.query, "entity": None})
+    for entry in entries:
+        raw = entry["handle"]
+        domain = web_domain(raw if "//" in raw else f"//{raw}")
+        if not re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}", domain):
+            sys.stderr.write(f"skipping (not a domain) :: {raw[:80]}\n")
+            continue
+        scoped = f"site:{domain} {args.query}" if args.query else f"site:{domain}"
+        targets.append({"query": scoped, "entity": entry["name"]})
+
+    if not targets:
+        return emit("web", []) or sys.stderr.write(
+            f"Nothing under '## Web' in {WATCHLIST}, and no -q given.\n")
+
+    if args.dry_run:
+        return print(json.dumps(
+            {"source": "web", "dry_run": True, "backend": backend,
+             "cost": "free" if backend == "keyless" else "one API call per query",
+             "queries": [t["query"] for t in targets]}, indent=2, ensure_ascii=False))
+
+    sys.stderr.write(f"backend: {backend} ({len(targets)} query/queries)\n")
+    signals, seen = [], set()
+    for target in targets:
+        found = web_search(target["query"], target["entity"], backend, key,
+                           since.isoformat(), today.isoformat(), args.per_source)
+        kept = 0
+        for item in found:
+            if item["url"] in seen:
+                continue
+            # Dates here are bare YYYY-MM-DD, so they are compared as strings
+            # rather than through in_window, which expects a tz-aware timestamp.
+            # Undated (keyless) results are kept, matching in_window's contract.
+            if item["date"] and item["date"] < since.isoformat():
+                continue
+            seen.add(item["url"])
+            signals.append(item)
+            kept += 1
+        label = target["entity"] or f"'{target['query'][:40]}'"
+        if not found:
+            sys.stderr.write(f"{label}: no results (blocked, or nothing indexed)\n")
+        else:
+            sys.stderr.write(f"{label}: {kept} of {len(found)} result(s) in window\n")
+
+    if not signals:
+        return emit("web", [], {"backend": backend})
+
+    # Same guard as Reddit's and YouTube's: a query matching on filler words
+    # would otherwise fill the brief. site: results are exempt -- a watched
+    # domain is on topic by definition.
+    if args.query:
+        for signal in signals:
+            signal["relevance"] = round(
+                relevance(args.query, f"{signal['title']} {signal['text']}"), 2)
+        floor = relevance_floor(args.query)
+        kept = [s for s in signals if s["watched"] or s["relevance"] >= floor]
+        if len(kept) < len(signals):
+            sys.stderr.write(f"{len(signals) - len(kept)} of {len(signals)} result(s) "
+                             f"cut below relevance floor {round(floor, 2)}\n")
+        if not kept:
+            best = max((s["relevance"] for s in signals), default=0.0)
+            sys.stderr.write(f"nothing cleared the floor (best was {best}); "
+                             f"try a shorter or broader -q\n")
+            return emit("web", [], {"filtered_out": len(signals),
+                                    "best_relevance": best, "backend": backend})
+        signals = kept
+
+    # DATE first, like YouTube: the open web has no engagement count, and an old
+    # page ranking well is not a signal. Undated (keyless) results sort last.
+    signals.sort(key=lambda s: s["date"] or "", reverse=True)
+    undated = sum(1 for s in signals if not s["date"])
+    if undated:
+        sys.stderr.write(f"{undated} result(s) carry no date "
+                         f"({backend} reports none); they sort last\n")
+    emit("web", signals[:args.limit], {"backend": backend})
+
+
 # Parses flags and hands off to the chosen source.
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--source", choices=("linkedin", "x", "reddit", "youtube"),
+    parser.add_argument("--source",
+                        choices=("linkedin", "x", "reddit", "youtube", "web"),
                         required=True)
     parser.add_argument("-d", "--days", type=int, default=7)
     parser.add_argument("-n", "--limit", type=int, default=25)
     parser.add_argument("-q", "--query",
-                        help="X, Reddit and YouTube: free-text topic research")
+                        help="X, Reddit, YouTube and Web: free-text topic research")
     parser.add_argument("--per-source", type=int, default=10,
                         help="LinkedIn: max posts per watchlist line (this is the bill). "
-                             "YouTube: how many recent videos to examine per channel (free)")
+                             "YouTube: how many recent videos to examine per channel (free). "
+                             "Web: max results per query")
     parser.add_argument("--enrich", type=int, default=5,
                         help="Reddit: how many top posts get their comments fetched. "
                              "YouTube: how many top videos get transcript + comments")
     parser.add_argument("--model", default=XAI_MODEL, help=f"X only (default {XAI_MODEL})")
+    parser.add_argument("--web-backend", default="auto",
+                        choices=("auto", "brave", "exa", "serper", "parallel", "keyless"),
+                        help="Web: force a backend. Default auto -- first key found "
+                             "in .env, else the keyless floor")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -1296,6 +1644,10 @@ def main():
         # In query mode a missing watchlist must not be fatal.
         entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("YouTube")
         run_youtube(args, entries)
+    elif args.source == "web":
+        # In query mode a missing watchlist must not be fatal.
+        entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("Web")
+        run_web(args, entries)
     elif args.source == "reddit":
         # In query mode a missing watchlist must not be fatal.
         entries = [] if (args.query and not os.path.exists(WATCHLIST)) else read_watchlist("Reddit")
