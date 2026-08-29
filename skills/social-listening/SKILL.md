@@ -1,6 +1,6 @@
 ---
 name: social-listening
-description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, YouTube, and the open web. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals — the posts most relevant to the user's business, most recent first — with brief analysis; a full table of every post is offered on request. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish", "what is the web saying about [topic]", "search the web for [topic]".
+description: Monitor what watched competitors and creators are posting on LinkedIn, X, Reddit, YouTube, and the open web. Reads context/signals/watchlist.md, asks which sources to run, returns Top Signals grouped by source — the posts most relevant to the user's business, most recent first — with brief analysis per source; a per-source table extract is offered on request, and the full run beyond that. Triggers on /social-listening or "what are my competitors posting", "check social listening", "what did [competitor] publish this week", "what is X saying about [topic]", "what is Reddit saying about [topic]", "what is on YouTube about [topic]", "what did [channel] publish", "what is the web saying about [topic]", "search the web for [topic]".
 ---
 
 # Social Listening
@@ -8,10 +8,12 @@ description: Monitor what watched competitors and creators are posting on Linked
 What the watchlist is **saying**. For what they are **doing** (hiring, funding,
 launching), use `skills/intent-signals`.
 
-Output in chat is **Top Signals** — up to 10 posts ranked by relevance to the
-user's business and recency, not engagement — with 5-10 lines of analysis, then
-stop. A raw table of every post is available on request but never printed by
-default. No file is written.
+Output in chat is **Top Signals, grouped by source** — up to 5 posts per source
+ranked by relevance to the user's business and recency, not engagement — with
+2-4 lines of analysis under each, then stop. Every source that ran gets its own
+block, in the same format; sources are never merged into one list. A per-source
+raw table is available on request, and even then it is an extract: the top 15
+rows of each source, with the rest offered below it. No file is written.
 
 ## Sources
 
@@ -244,15 +246,31 @@ Part 1 rather than reporting it as a silent week.
 ## Step 3 — Report
 
 Default output is **Top Signals** with short analysis, and nothing else. The
-**raw table** of everything is Part 2 — held back unless the user asks for it.
+**raw table** is Part 2 — held back unless the user asks for it, and even then
+it is an extract, not the whole run.
 
-### Part 1 — Top Signals
+**Everything in this step is grouped by source.** A run that fetched Reddit and
+YouTube produces a Reddit block and a YouTube block, in both parts, in the same
+format. Never merge sources into one list or one table. Sources measure
+different things — views are not upvotes are not reactions — and a merged
+ranking silently compares them. Order the blocks by how much they returned,
+most first, and use the source's own sort inside each block.
 
-Up to 10 posts, ranked by **relevance to the user's business, then recency** —
-**not** by engagement. Engagement is a tiebreaker between two equally relevant
-posts, never the sort key. A 30,000-engagement post from outside the user's
-space does not belong here; a 90-engagement post from a direct competitor
-describing their delivery model does.
+### Part 1 — Top Signals, by source
+
+One block per source that ran. Head each with the source, its window and its
+count:
+
+```
+**Reddit** — 7 days, 34 posts, 6 worth reading
+```
+
+Then up to **5 posts per source** (not 10 across the run), ranked by
+**relevance to the user's business, then recency** — **not** by engagement.
+Engagement is a tiebreaker between two equally relevant posts, never the sort
+key. A 30,000-engagement post from outside the user's space does not belong
+here; a 90-engagement post from a direct competitor describing their delivery
+model does.
 
 Read `context/signals/signals.md` for what counts and how to rank. It is the
 authority — its topic and ignore lists override any judgement of yours. If the
@@ -284,69 +302,79 @@ outranks older when relevance is comparable; call out anything from the last
 48 hours. Say so plainly if the most relevant posts are all from the window's
 far edge.
 
-Fewer than 10 is correct and expected when the run is thin — never pad the list
-with off-topic posts to reach ten. If nothing qualifies, say so in one line and
-go straight to the table.
+Fewer than 5 in a block is correct and expected when that source ran thin —
+never pad to reach five. A source that qualified nothing gets one line saying
+so, and still gets its block, so its silence is visible rather than absent.
 
-Format each as one line: `<Author> — <eng> — <what the post is> — <link>`.
+Format each post as one line: `<Author> — <eng> — <what the post is> — <link>`.
 
-Then **5-10 lines of analysis** of those signals. This is the only place
-analysis is allowed. Cover what competitors are publishing and selling
-underneath it, what is repeated across several of them, what is new this week
-versus continuing, and where the numbers say something the text does not.
-Ground every claim in a specific post or number from the run — no generic
-content-marketing advice. Note briefly when the highest-engagement posts of the
-run were excluded as off-topic, so the omission is visible.
+Then **2-4 lines of analysis under each block**, about that source only: what
+those accounts are publishing and selling underneath it, what repeats, what is
+new versus continuing, where the numbers say something the text does not. Ground
+every claim in a specific post or number from that source — no generic
+content-marketing advice. Note briefly when that source's highest-engagement
+posts were excluded as off-topic, so the omission is visible.
 
-Keep it to 5-10 lines. Do not pad, and do not spill into a strategy memo. Close
-with at most one line on what is worth acting on, and only when the data
-supports it.
+When two or more sources ran, close with **up to 3 lines across sources** —
+what shows up in more than one place, and where they disagree. This is the only
+place sources are compared. Skip it on a single-source run.
 
-**Then stop.** End the turn with a single line offering the rest, naming how
-many posts are being held back — e.g. *"39 other posts in the run — say the word
-for the full table."* Do not use AskUserQuestion for this; it is an offer, not a
-blocking question, and the user usually will not need it.
+Keep the whole of Part 1 tight. Do not spill into a strategy memo. Close with at
+most one line on what is worth acting on, and only when the data supports it.
+
+**Then stop.** End the turn with a single line offering the rest, naming what is
+held back per source — e.g. *"Held back: 28 more Reddit posts, 11 YouTube — say
+the word for the tables."* Do not use AskUserQuestion for this; it is an offer,
+not a blocking question, and the user usually will not need it.
 
 Flag any run that returned nothing, errored, was retried, or produced duplicate
-posts here in Part 1 — those belong with the summary, not held back with the
-table.
+posts in that source's block — those belong with the summary, not held back with
+the table.
 
-### Part 2 — Raw table (only on request)
+### Part 2 — Raw tables, by source (only on request)
 
-**Do not print this by default.** It costs a lot of tokens and the Top Signals
-usually answer the question on their own. Build it only when the user asks for
-it — "full table", "show me everything", "more detail", or a follow-up about
-posts outside the Top Signals.
+**Do not print these by default.** They cost a lot of tokens and the Top Signals
+usually answer the question on their own. Build them only when the user asks —
+"full table", "show me everything", "more detail", or a follow-up about posts
+outside the Top Signals.
 
-When asked, print **every post from the run**, including the Top Signals and
-everything cut from them as off-topic — the table is the complete record, not
-the leftovers. This is where broad and off-topic posts appear, so nothing is
-lost.
+**One table per source, never a merged one.** Each keeps its own sort: by
+`engagement` descending on LinkedIn, X and Reddit; by date, newest first, on
+YouTube and Web, matching how those sources rank. Head each table with one line
+stating the source, window and how many of its posts are shown out of how many
+it returned.
+
+**Each table is an extract, not the whole run.** Print the **top 15 rows per
+source** by that source's sort, then one line below it naming the remainder —
+e.g. *"19 more Reddit posts in the run — ask for the rest."* Only when the user
+asks again ("everything", "all of them", "the full list") do you print the
+remaining rows, and then print them all. A source with 15 or fewer posts is
+already complete — print it whole and say nothing about a remainder.
+
+The extract is the source's ranked top, not a curated pick: take rows straight
+off the sort, including off-topic ones. Part 2 is the record, so a post cut from
+Top Signals as off-topic still appears here in rank order — that is what makes
+the cut visible.
 
 The run's JSON stays available for the whole session, so a later request is
-answered from it — never re-run the script to rebuild the table, since a
-LinkedIn re-run bills again.
+answered from it — never re-run the script to rebuild a table, since a LinkedIn
+re-run bills again.
 
-**One markdown table** across whatever ran — all sources merged into a single
-table, sorted by `engagement` descending. Not a table per source. When the run
-is YouTube-only, sort the table by date instead, matching how the source ranks —
-otherwise an old video with high view counts leads a table meant to show what is
-recent. In a mixed run keep the engagement sort, but note that YouTube's number
-is views and so is not comparable to a LinkedIn or Reddit count.
+Columns, in this order, in every source's table:
 
-Columns, in this order:
+| Author | Eng | Breakdown | Summary | Link |
+|---|---|---|---|---|
 
-| Author | Src | Eng | Breakdown | Summary | Link |
-|---|---|---|---|---|---|
+There is no `Src` column — the table's heading already names the source.
 
 - **Author** — the post's `author`, not the watchlist `entity`. On Reddit that
   is the redditor; put the subreddit (`entity`) in the summary. On YouTube it
   is the channel. When they differ
   (a repost surfaced through a watched profile), use the real author and note the
   watchlist line it came from in the summary.
-- **Src** — `LI`, `X`, `RD`, `YT`, or `WB`.
 - **Eng** — the `engagement` number, plain digits. A **null** means the count was
-  unknown, not zero — write `?`, never `0`.
+  unknown, not zero — write `?`, never `0`. On YouTube this is views; on Web
+  there is no number at all, so the column reads `—` in every row.
 - **Breakdown** — `<likes>/<reposts>/<replies>` on X,
   `<reactions>/<comments>/<shares>` on LinkedIn, `<upvotes>/<comments>` on
   Reddit, `<views>/<likes>/<comments>` on YouTube, slash-separated, digits only.
@@ -354,22 +382,22 @@ Columns, in this order:
 - **Summary** — 1-2 sentences on what the post says. Keep it to roughly 200
   characters so the row stays readable; the table is the deliverable, so trade
   detail for scannability here rather than letting one cell dominate.
-- **Link** — a markdown link labelled `link`, pointing at the post URL.
+- **Link** — a markdown link labelled `link`, pointing at the post URL. Every
+  printed row gets one; an extract drops whole rows, never a row's URL.
 
 The summary describes the post's content — what it claims, lists, or argues.
 Favour the concrete specifics it contains: numbers, tool names, frameworks,
 prices. Do not say why it matters, who it threatens, what it signals about the
 market, or what the user should do — that belongs in Part 1, not here.
 
-**Forbidden inside the table:** themes, groupings by topic, cross-post patterns,
+**Forbidden inside the tables:** themes, groupings by topic, cross-post patterns,
 competitive read-outs, opportunities, and recommendations. Rows stay descriptive.
-Sort strictly by engagement — never regroup rows by topic or source. If several
+Sort strictly by the source's own key — never regroup rows by topic. If several
 posts cover the same subject, they are simply separate rows.
 
-Every row gets its URL. **Never invent a post that was not in the JSON.**
-One line above the table may state the window, source(s) and post count. Nothing
-below it — the analysis already happened in Part 1, so do not close with a
-second round of it.
+**Never invent a post that was not in the JSON.** Nothing goes below the last
+table but the remainder lines — the analysis already happened in Part 1, so do
+not close with a second round of it.
 
 ## Next
 
