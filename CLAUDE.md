@@ -23,7 +23,8 @@ Core offer: [e.g. premium content + qualified founder conversations]
 - **xAI Grok (`x_search`)**: X/Twitter listening + free-text X research
 - **yt-dlp**: YouTube listening — search, channels, transcripts, comments (free, keyless)
 - **Web search**: harness-native search first, then Brave/EXA/Serper/Parallel by key, then keyless DuckDuckGo/Startpage
-- **Gmail connector (MCP)**: read-only newsletter digest — no script, no key
+- **Gmail connector (MCP)**: newsletter digest — no script, no key. Read-only,
+  except sending the user their own digest when they ask for it
 - **Python (stdlib only)**: signal watching scripts in `scripts/signals/`
 
 ## Workflow
@@ -97,7 +98,10 @@ return real engagement counts and sort by them; **YouTube and Web sort by date,
 newest first**, since an old video or page is not a signal.
 
 **Gmail is the one source with no script.** It runs through the Gmail MCP
-connector, strictly read-only — search and read, never send, label or delete.
+connector, read-only by default — search and read, never label or delete.
+The one exception is sending: if the user asks for a digest emailed to
+themselves (a scheduled routine, for example), sending that one email to their
+own address is allowed. Never email anyone else.
 Free, no key: authorize the connector in claude.ai settings. `## Gmail` holds
 newsletter **names**, not addresses — Claude resolves each to its real sending
 addresses at run time, catching the several a writer with multiple publications

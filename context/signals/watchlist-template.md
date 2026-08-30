@@ -31,8 +31,10 @@ Acme Corp: https://youtube.com/@acme
 ## Gmail
 
 > Read by `skills/social-listening` via the Gmail connector — no script, no key.
-> Free, and strictly read-only: it searches and reads, never sends, labels or
-> deletes. Needs the Gmail connector authorized in your claude.ai settings.
+> Free, and read-only by default: it searches and reads, never labels or
+> deletes. The one exception is sending you your own digest, to your own
+> address, when you asked for it — never mail to anyone else.
+> Needs the Gmail connector authorized in your claude.ai settings.
 >
 > One newsletter per line — just the name, as you'd say it out loud. No email
 > address needed: Claude looks up who it actually comes from, and catches the
