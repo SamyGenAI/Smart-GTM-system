@@ -31,3 +31,5 @@ context/signal-performance-sync.json
 # Templates (*-template.md) ARE tracked and pushed — only the filled-in versions are ignored
 context/*/*.md
 !context/*/*-template.md
+# Watchlist is committed so scheduled cloud routines can read it.
+!context/signals/watchlist.md
