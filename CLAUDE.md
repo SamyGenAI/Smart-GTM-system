@@ -22,6 +22,7 @@ Core offer: [e.g. premium content + qualified founder conversations]
 - **Apify (`supreme_coder/linkedin-post`)**: LinkedIn post listening (bills per post)
 - **xAI Grok (`x_search`)**: X/Twitter listening + free-text X research
 - **yt-dlp**: YouTube listening — search, channels, transcripts, comments (free, keyless)
+- **Gemini 2.5 Flash (`GEMINI_API_KEY`)**: reads YouTube videos that have no captions
 - **Web search**: harness-native search first, then Brave/EXA/Serper/Parallel by key, then keyless DuckDuckGo/Startpage
 - **Gmail connector (MCP)**: newsletter digest — no script, no key. Read-only,
   except sending the user their own digest when they ask for it
@@ -92,7 +93,8 @@ with `--source linkedin` (Apify, bills per post), `--source x` (xAI Grok
 scores + shreddit comments; free, but paced ~2s per request so a multi-subreddit
 run takes a couple of minutes), `--source youtube` (yt-dlp; free and keyless,
 but needs `pip install yt-dlp` — searches topics or watched channels and pulls
-transcripts + top comments), or `--source web` (Brave/EXA/Serper/Parallel when
+transcripts + top comments; most videos have no captions, so Gemini 2.5 Flash
+reads those directly when `GEMINI_API_KEY` is set), or `--source web` (Brave/EXA/Serper/Parallel when
 a key is set, else a free keyless DuckDuckGo/Startpage floor). The first three
 return real engagement counts and sort by them; **YouTube and Web sort by date,
 newest first**, since an old video or page is not a signal.

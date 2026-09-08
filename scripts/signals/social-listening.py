@@ -4,6 +4,7 @@
 --source x         xAI Grok x_search, one call per run; -q for topic research.
 --source reddit    keyless RSS + arctic-shift + shreddit; free, no API key.
 --source youtube   yt-dlp; free, no API key. Transcripts + comments, newest first.
+                   Gemini reads the caption-less ones when GEMINI_API_KEY is set.
 --source web       Brave/Exa/Serper/Parallel if a key is set, else keyless DDG/Startpage.
 
 Prints JSON to stdout. Run from the repo root.
@@ -891,6 +892,29 @@ TRANSCRIPT_MAX_WORDS = 4000
 # So a non-zero exit is never trusted over the file that is actually on disk.
 YT_SUB_LANGS = "en.*,fr.*"
 
+# Gemini fallback for the caption-less case, which is most of them: YouTube
+# auto-captions only some uploads, and a video with no transcript is a video we
+# cannot read. Gemini 2.5 ingests the YouTube URL directly and reports what was
+# actually said, so `transcript_unavailable` stops meaning "unreadable".
+# Only for videos yt-dlp came back empty on -- never a replacement for real
+# captions, which are free, exact and unlimited.
+GEMINI_URL = ("https://generativelanguage.googleapis.com/v1beta/models/"
+              "{model}:generateContent")
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_TIMEOUT = 300      # video ingestion is slow; a short timeout wastes the call
+GEMINI_MAX_FALLBACKS = 5  # per run, so one uncaptioned channel cannot drain the quota
+# What comes back must be a transcript-equivalent, not a review: everything
+# downstream reads this field exactly as it reads captions.
+GEMINI_PROMPT = (
+    "Transcribe and condense what is actually said in this video, for social "
+    "listening research. Return plain prose only -- no preamble, no markdown, "
+    "no timestamps. Open with a three-sentence summary of the core message, "
+    "then give a dense account of the substance in the speaker's own terms, "
+    "including the claims, numbers, product names and opinions stated. Report "
+    "in English even when the video is not. Never state anything the video "
+    "does not."
+)
+
 # Live/upcoming streams have no real publish date and no transcript; they are
 # not signals yet.
 YT_SKIP_LIVE = ("is_live", "is_upcoming")
@@ -1033,6 +1057,47 @@ def fetch_transcript(vid):
             return None
 
 
+# Gemini watches the video when YouTube has no captions to give. Returns the
+# transcript-equivalent text, or None -- a failure here is not fatal, the video
+# just stays as unreadable as it already was.
+def gemini_transcript(vid):
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        return None
+    body = {"contents": [{"parts": [
+        {"text": GEMINI_PROMPT},
+        {"file_data": {"file_uri": YT_WATCH_URL.format(vid=vid)}},
+    ]}]}
+    request = urllib.request.Request(
+        GEMINI_URL.format(model=GEMINI_MODEL),
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "x-goog-api-key": key})
+    try:
+        with urllib.request.urlopen(request, timeout=GEMINI_TIMEOUT) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        # 429 is the quota, 400 usually a private, age-gated or oversized video.
+        detail = (err.read().decode("utf-8", "replace") or "")[:200]
+        sys.stderr.write(f"gemini {err.code} on {vid} :: {detail}\n")
+        return None
+    except Exception as err:
+        sys.stderr.write(f"gemini failed on {vid} :: {err}\n")
+        return None
+
+    parts = []
+    for candidate in payload.get("candidates") or []:
+        for part in (candidate.get("content") or {}).get("parts") or []:
+            if isinstance(part.get("text"), str):
+                parts.append(part["text"])
+    text = _WS.sub(" ", " ".join(parts)).strip()
+    if not text:
+        return None
+    words = text.split()
+    if len(words) > TRANSCRIPT_MAX_WORDS:
+        text = " ".join(words[:TRANSCRIPT_MAX_WORDS]) + " ..."
+    return text
+
+
 # Top comments for one video. Where the buying pain gets stated plainly, same as
 # Reddit -- so this is enrichment worth its runtime, not a nice-to-have.
 def fetch_youtube_comments(vid):
@@ -1140,6 +1205,8 @@ def run_youtube(args, entries):
              "discovery_calls": len(channels) + (1 if args.query else 0),
              "max_videos_examined": per_target * (len(channels) + (1 if args.query else 0)),
              "transcripts_and_comments": args.enrich,
+             "gemini_fallback": bool(os.getenv("GEMINI_API_KEY"))
+                                and not args.no_gemini,
              "watching": [c["name"] for c in channels]},
             indent=2, ensure_ascii=False))
 
@@ -1250,10 +1317,22 @@ def run_youtube(args, entries):
     # only the leaders get them -- and they are the reason to use this source at
     # all, so --enrich 0 is a deliberate choice, not the default.
     enriched = 0
+    fallbacks = 0
+    use_gemini = bool(os.getenv("GEMINI_API_KEY")) and not args.no_gemini
     for signal in signals[:args.enrich]:
         transcript = fetch_transcript(signal["video_id"])
         if transcript:
             signal["transcript"] = transcript
+            signal["transcript_source"] = "captions"
+        elif use_gemini and fallbacks < GEMINI_MAX_FALLBACKS:
+            # No captions -- have Gemini watch the video instead.
+            fallbacks += 1
+            transcript = gemini_transcript(signal["video_id"])
+            if transcript:
+                signal["transcript"] = transcript
+                signal["transcript_source"] = "gemini"
+            else:
+                signal["transcript_unavailable"] = True
         else:
             # Captions genuinely absent, or YouTube throttled us. Either way the
             # analysis must not silently treat the video as having said nothing.
@@ -1261,9 +1340,12 @@ def run_youtube(args, entries):
         signal["top_comments"] = fetch_youtube_comments(signal["video_id"])
         enriched += 1
     if enriched:
-        got = sum(1 for s in signals[:enriched] if s.get("transcript"))
-        pulled = sum(len(s.get("top_comments") or []) for s in signals[:enriched])
-        sys.stderr.write(f"enriched {enriched} video(s): {got} transcript(s), "
+        done = signals[:enriched]
+        got = sum(1 for s in done if s.get("transcript"))
+        via = sum(1 for s in done if s.get("transcript_source") == "gemini")
+        pulled = sum(len(s.get("top_comments") or []) for s in done)
+        extra = f" ({via} via gemini)" if via else ""
+        sys.stderr.write(f"enriched {enriched} video(s): {got} transcript(s){extra}, "
                          f"{pulled} comment(s)\n")
 
     emit("youtube", signals)
@@ -1632,6 +1714,9 @@ def main():
                         choices=("auto", "brave", "exa", "serper", "parallel", "keyless"),
                         help="Web: force a backend. Default auto -- first key found "
                              "in .env, else the keyless floor")
+    parser.add_argument("--no-gemini", action="store_true",
+                        help="YouTube: skip the Gemini fallback that reads "
+                             "caption-less videos (on whenever GEMINI_API_KEY is set)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 

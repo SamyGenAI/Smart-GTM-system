@@ -26,7 +26,7 @@ Gmail MCP tools directly:
 | `linkedin` | bills per post scraped | `APIFY_API_KEY` |
 | `x` | one API call per run, `-n` is ~free | `X_API_KEY` |
 | `reddit` | free — no key, no credits | nothing |
-| `youtube` | free — no key, no credits | `yt-dlp` installed |
+| `youtube` | free — no key, no credits | `yt-dlp` installed; `GEMINI_API_KEY` optional |
 | `web` | free keyless, or one API call per query | nothing, or a search key |
 | `gmail` | free — no key, no credits | Gmail connector authorized |
 
@@ -147,10 +147,20 @@ useful default.
 `--enrich` (default 5) sets how many of the top videos get their **transcript
 and top comments** pulled. This is the reason to use the source at all — the
 transcript is what was actually said, and the comments are where viewers state
-the pain. Read both before ranking. A video carrying `transcript_unavailable`
-had no captions or was throttled; say so rather than treating it as having said
-nothing. Videos below the `--enrich` cutoff simply have no transcript key —
-that is not a failure, just a budget line, so never report those as silent.
+the pain. Read both before ranking. Videos below the `--enrich` cutoff simply
+have no transcript key — that is not a failure, just a budget line, so never
+report those as silent.
+
+Most YouTube videos carry no captions, so when `GEMINI_API_KEY` is set the
+script falls back to **Gemini 2.5 Flash reading the video itself** — same field,
+same use, and `transcript_source` says which route produced it (`captions` or
+`gemini`). It fires only where yt-dlp came back empty, and at most 5 times per
+run. Treat a Gemini transcript as slightly looser than captions: it is a dense
+account of what was said, not a verbatim record, so paraphrase from it rather
+than putting it in quotation marks. `--no-gemini` turns it off; without the key
+nothing changes. A video still carrying `transcript_unavailable` had no captions
+and Gemini could not read it either (private, age-gated, or quota) — say so
+rather than treating it as having said nothing.
 
 Engagement on YouTube is `views` — the best single indicator of reach there.
 It is never a sum: views dwarf likes by orders of magnitude, so adding them
