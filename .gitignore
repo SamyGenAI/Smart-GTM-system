@@ -1,7 +1,11 @@
+# Dependencies (install with npm install; the lockfile stays)
+node_modules/
+
 # Environment
 .env
 .env.*
 *.env
+!.env.example
 
 # Credentials and secrets
 credentials.json
@@ -13,6 +17,10 @@ credentials.json
 .DS_Store
 Thumbs.db
 
+# Python
+__pycache__/
+*.pyc
+
 # Editor
 .vscode/
 .idea/
@@ -21,6 +29,7 @@ Thumbs.db
 # Sensitive outputs (never commit raw CRM data or contact lists)
 outputs/lists/
 outputs/raw/
+outputs/gtm-pending/
 *.csv
 
 # Sync script live data outputs (contain metrics, not committed)
@@ -31,5 +40,7 @@ context/signal-performance-sync.json
 # Templates (*-template.md) ARE tracked and pushed — only the filled-in versions are ignored
 context/*/*.md
 !context/*/*-template.md
-# Watchlist is committed so scheduled cloud routines can read it.
+# Watchlist and GTM settings are committed so routines can read them.
+# They do not contain the offer or the ICP.
 !context/signals/watchlist.md
+!context/signals/gtm.md
