@@ -1,86 +1,65 @@
-# AGENTS.md
+# GTM OS
 
-Persistent GTM context for this repo. Full details live in `context/`.
+This repo is Samy's **GTM OS**: lead generation, outreach prep, and sales research for The Smart Creator. The product is the Smart Operating System, an AI agent swarm on Grok Bot. The ICP is founders, creators, and knowledge workers who want to save time and spend less time in front of a screen.
 
-> **New user?** Run setup first:
-> `Read skills/setup/SKILL.md and set up this repo for [your-domain.com]`
+One repo per OS. This repo is GTM. Content OS is `Smart-creator-design-system`. The shared brain is the private vault `https://github.com/SamyGenAI/Samy-SmartOS` (Karpathy LLM-wiki layout), checked out at `brain/`.
 
-## Company
+Grok Bot orchestrates. Claude Code, Codex, or Cursor do the work in this repo.
 
-**[YOUR_COMPANY]** helps [who] do [what outcome].
+## Read the brain first
 
-GTM motion: [e.g. founder-led LinkedIn outreach]
-Primary channel: [e.g. LinkedIn DM]
-Core offer: [e.g. premium content + qualified founder conversations]
+1. `brain/CLAUDE.md` — vault schema.
+2. `brain/wiki/gtm-os.md` — GTM hub.
+3. `brain/raw/me/offer.md` — offer, ICP, positioning. Required headings are listed in `context/README.md`.
+4. `brain/raw/me/voice.md` and `brain/raw/me/proof.md` — voice and proof, for enrichment.
+5. `context/signals/` — GTM-only watchlist and settings. Do not copy offer or ICP text into this repo.
 
-## Stack
+`raw/` is immutable. Never edit it, and never commit vault content. A submodule stores a URL and a commit, nothing else.
 
-- **EXA**: lead + company discovery
-- **Codex Haiku**: lead scoring and qualification
-- **Codex Haiku**: deep prospect enrichment (with web search)
-- **RapidAPI (`linkedin-api8`)**: setup profile extraction and post-engagers extraction
-- **Python (stdlib only)**: signal watching scripts in `scripts/signals/`
+If `brain/` is missing, stop and tell Samy to run:
 
-## Workflow
-
-```text
-1) Setup profile, website URL, and LinkedIn URL         -> skills/setup
-2) Find leads with EXA                    -> skills/find-leads
-3) Score leads with Codex Haiku          -> skills/score-leads
-4) Enrich leads with Haiku + Web Search   -> skills/enrich-leads
-5) Export outreach list CSV               -> skills/export-leads
-
-Warm source path:
-RapidAPI post engagers -> skills/post-engagers -> skills/score-leads
-
-Signal watching path (runs on its own, reports in chat):
-context/signals/watchlist.md -> skills/social-listening
-context/signals/watchlist.md -> skills/intent-signals
+```bash
+git submodule add -b main https://github.com/SamyGenAI/Samy-SmartOS.git brain
 ```
 
-## Quick Commands
+The `.gitmodules` entry is already here. The gitlink is not, because this environment could not read the private vault. If Git says `brain` is already registered, delete the `[submodule "brain"]` block and run the add command again. After that commit exists, later clones use `git submodule update --init brain`.
 
-```text
-Read skills/setup/SKILL.md and set up this repo for [your-domain.com]
+## Pick a pipeline
 
-Read skills/find-leads/SKILL.md and find 25 Tier 1 leads in [your target geography/segment]
+Read `pipelines/` and run one flow. Do not invent a send step.
 
-Read skills/score-leads/SKILL.md and score this lead list with Codex Haiku
+| Pipeline | Doc |
+|---|---|
+| Find leads | `pipelines/find-leads.md` |
+| Score | `pipelines/score-leads.md` |
+| Enrich (draft DMs only) | `pipelines/enrich-leads.md` |
+| Post engagers | `pipelines/post-engagers.md` |
+| Social listening / intent | `pipelines/social-listening.md` |
+| Export to Sheets | `pipelines/export-to-sheets.md` |
+| Who reviews the list | `pipelines/handoffs.md` |
 
-Read skills/post-engagers/SKILL.md and pull engagers from my last 10 posts
+Listening and intent always ask which source to run. They never run every source by default.
 
-Read skills/enrich-leads/SKILL.md and enrich tier1/tier2 leads with Haiku web research
+## Cost and approval
 
-Read skills/export-leads/SKILL.md and export outputs/[date]-[campaign]-leads.csv
+Paid scripts print Anthropic, Exa, and RapidAPI call counts and an approximate USD cost, then stop.
 
-Read skills/social-listening/SKILL.md and check what my watchlist has been posting this week
+- Preview: `--estimate` or `--dry-run`
+- Spend: `--confirm`, only after Samy approves the estimate
 
-Read skills/intent-signals/SKILL.md and check buying signals for my watchlist
-```
+Do not make a paid call yourself to "try it". Do not add API keys. `.env.example` lists `ANTHROPIC_API_KEY`, `EXA_API_KEY`, and optional `RAPIDAPI_KEY`. Real keys stay in `.env`.
 
-## Signals
+Nothing sends a message, enrolls a sequence, posts, comments, or replies.
 
-Two separate context files, copied from their `-template.md` siblings:
+## Outputs
 
-- `context/signals/watchlist.md` — WHO to watch. One line per entity,
-  `Name: handle`, grouped by platform. Reddit is just `r/subreddit`.
-  Read directly by the scripts.
-- `context/signals/signals.md` — WHAT counts as a signal and how to rank it.
-  Read by the skills, not the scripts. Optional but sharpens results.
+- Lead CSV, UTF-8 with BOM, gitignored: `outputs/`
+- Import that CSV into the Drive folder in `context/signals/gtm.md`
+- Run summary (query, counts, top leads, estimated cost): `brain/outputs/gtm/<date>-<run>/summary.md`
+- If the submodule is not checked out, the summary is staged in `outputs/gtm-pending/` and must be moved into the vault later
 
-Listening runs from one script, `scripts/signals/social-listening.py`,
-with `--source linkedin` (Apify, bills per post), `--source x` (xAI Grok
-`x_search`, one call per run), or `--source reddit` (keyless RSS + arctic-shift
-scores + shreddit comments; free, but paced ~2s per request so a multi-subreddit
-run takes a couple of minutes). All three return real engagement counts and sort
-by them. Intent sources live in `scripts/signals/intent/`.
+## Current priorities
 
-Both skills ALWAYS ask which sources to run before running anything. They
-never run every source by default, and they report conversationally in chat
-rather than writing a CSV.
-
-## Current Priorities
-
-- [Your top GTM priority this quarter]
-- [Second priority]
-- [Third priority]
+- Keep ICP and positioning only in the brain, and fill the `offer.md` headings the scripts expect.
+- Run find → score → enrich → export with an estimate before every paid step.
+- Hand reviewed lists to the Grok Bot GTM team. No automatic sending.

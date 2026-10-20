@@ -1,11 +1,11 @@
 ---
 name: enrich-leads
-description: Research scored leads with Claude Haiku + Web Search and write two personalized LinkedIn DMs per lead. Only processes leads at or above a score threshold (default 60). Appends outreach_angle, dm_sequence_1, dm_sequence_2 columns. Requires ANTHROPIC_API_KEY and context/brief/brief.md. Triggers on /enrich-leads or any message like "enrich leads", "write DMs", "research these prospects", or "add outreach copy".
+description: Research scored leads with Claude Haiku + Web Search and draft two LinkedIn DMs per lead. Only processes leads at or above a score threshold (default 60). Appends outreach_angle, dm_sequence_1, dm_sequence_2 columns. Requires ANTHROPIC_API_KEY and brain/raw/me/offer.md. Does not send. Triggers on /enrich-leads or any message like "enrich leads", "write DMs", "research these prospects", or "add outreach copy".
 ---
 
 # Skill: Enrich Leads
 
-Generic skill: works for any company. Company specifics are loaded at runtime from a SHORT `context/brief/brief.md` (offer + ICP only, max ~150 words). The long `positioning.md` and `icp-definition.md` files are NOT sent to the API.
+Offer, ICP, and positioning are loaded at runtime from `brain/raw/me/offer.md`. Voice and proof come from `voice.md` and `proof.md` in the same folder, each clipped to 1500 characters. Nothing from those files is copied into this repo. Draft DMs are not sent.
 
 ## Model + Source
 
@@ -32,7 +32,7 @@ All inputs **must be scored first** with `skills/score-leads`. The `score` colum
 
 **`inputs/post-engagers/`** — drop post-engager CSVs here (from `skills/post-engagers`). Columns: `profile_name`/`name`, `profile_url`/`url`, `headline`. Both scripts auto-normalize these columns.
 
-Also required: `context/brief/brief.md`. Hard cap: 1500 chars sent to the model. Per-lead fields are clipped before sending (`title` 300, `snippet` 300, `highlights` 500, `why_match` 240) to keep prompts small.
+Also required: the offer headings in `context/README.md`. The combined brief is capped around 4500 characters. Per-lead fields are clipped before sending (`title` 300, `snippet` 300, `highlights` 500, `why_match` 240).
 
 ## Output (strict, CSV-only)
 
@@ -111,7 +111,7 @@ node scripts/score_leads_haiku.mjs \
 node scripts/enrich_leads_haiku.mjs \
   -i outputs/leads-scored.csv \
   -o outputs/leads-enriched.csv \
-  -s 60 --sleep-ms 15000 --web-searches 1
+  -s 60 --sleep-ms 15000 --web-searches 1 --estimate
 ```
 
 **From LinkedIn connections (`inputs/connections/`):**

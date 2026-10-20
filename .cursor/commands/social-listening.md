@@ -14,3 +14,4 @@ For an open-web topic question, prefer your own web search tool over the script
 when this harness gives you one; the script is the fallback and the watchlist path.
 
 If no sources were named, ask which sources to run before running anything — never run every source by default.
+Read `brain/raw/me/offer.md` for ICP and positioning (do not copy it). Run paid scripts with `--estimate` first and wait for approval before `--confirm`. Never send, enroll, or post.

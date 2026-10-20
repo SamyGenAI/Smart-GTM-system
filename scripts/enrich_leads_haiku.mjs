@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { enrichmentBrief, loadOffer } from "./lib/brain.mjs";
+import { estimateEnrich } from "./lib/costs.mjs";
+import { gatePaid } from "./lib/guard.mjs";
+import { writeRunSummary } from "./lib/summary.mjs";
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -178,17 +182,9 @@ function extractFirstName(title) {
   return firstWord.replace(/[^\p{L}\p{M}\-']/gu, "");
 }
 
-const MAX_BRIEF_CHARS = 1500;
-
 function loadContext() {
-  if (!fs.existsSync("context/brief/brief.md")) {
-    throw new Error(
-      "Missing context/brief/brief.md. Create a short brief (offer + ICP + angle bias, ~150 words) before running enrichment.",
-    );
-  }
-  const raw = fs.readFileSync("context/brief/brief.md", "utf8");
-  const trimmed = raw.length > MAX_BRIEF_CHARS ? raw.slice(0, MAX_BRIEF_CHARS) : raw;
-  return { brief: trimmed };
+  const { sections } = loadOffer();
+  return { brief: enrichmentBrief(sections) };
 }
 
 function buildSystemPrompt({ brief }) {
@@ -379,13 +375,6 @@ async function main() {
       "  node scripts/enrich_leads_haiku.mjs -i inputs/post-engagers/engagers.csv -o outputs/engagers-enriched.csv",
     );
   }
-  if (!args.outCsv) {
-    throw new Error("Missing --out-csv. This script writes CSV output only.");
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("Missing ANTHROPIC_API_KEY in environment.");
-  }
-
   const rawLeads = readCsv(args.input);
   if (rawLeads.length === 0) {
     throw new Error("Input CSV has no leads.");
@@ -411,6 +400,45 @@ async function main() {
 
   const cap = args.maxLeads > 0 ? Math.min(args.maxLeads, eligible.length) : eligible.length;
   const target = eligible.slice(0, cap);
+  const webSearches = Number.isFinite(args.webSearches) && args.webSearches > 0 ? args.webSearches : 0;
+  const cost = estimateEnrich({ leadCount: target.length, webSearches });
+  const decision = gatePaid({
+    argv: process.argv,
+    estimate: cost,
+    extra: {
+      input: args.input,
+      totalLeads: allLeads.length,
+      eligible: eligible.length,
+      to_enrich: target.length,
+      minScore,
+    },
+  });
+  if (decision !== "confirmed") {
+    const summary = writeRunSummary({
+      run: "enrich-leads",
+      query: args.input,
+      counts: { total: allLeads.length, eligible: eligible.length, to_enrich: target.length },
+      topLeads: target.slice(0, 10).map((lead) => ({
+        name: lead.title || lead.name,
+        url: lead.url,
+        score: lead.score,
+        why_match: lead.why_match,
+      })),
+      cost,
+      csvPath: args.outCsv || null,
+      mode: decision,
+      notes: "Enrichment reads ## Offer, ## ICP, and ## Positioning from offer.md, plus voice.md and proof.md when those files exist. Draft DMs are not sent.",
+    });
+    process.stderr.write(`Summary: ${summary}\n`);
+    process.exit(decision === "estimate" ? 0 : 2);
+  }
+
+  if (!args.outCsv) {
+    throw new Error("Missing --out-csv. This script writes CSV output only.");
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("Missing ANTHROPIC_API_KEY in environment.");
+  }
 
   const systemPrompt = buildSystemPrompt(loadContext());
 
@@ -420,7 +448,7 @@ async function main() {
   for (const lead of target) {
     const url = String(lead.url ?? "").trim();
     try {
-      const { text, searchUrls } = await enrichLead(lead, systemPrompt, args.model, args.webSearches);
+      const { text, searchUrls } = await enrichLead(lead, systemPrompt, args.model, webSearches);
       const parsed = parseEnrichment(text, searchUrls);
       enrichmentByUrl.set(url, parsed);
       if (!parsed.outreach_angle) skipped += 1;
@@ -451,7 +479,32 @@ async function main() {
   });
 
   fs.mkdirSync(path.dirname(args.outCsv), { recursive: true });
-  fs.writeFileSync(args.outCsv, `${outputHeaders.join(",")}\n${outputRows.join("\n")}\n`, "utf8");
+  fs.writeFileSync(args.outCsv, `\uFEFF${outputHeaders.join(",")}\n${outputRows.join("\n")}\n`, "utf8");
+
+  const summary = writeRunSummary({
+    run: "enrich-leads",
+    query: args.input,
+    counts: {
+      total: allLeads.length,
+      eligible: eligible.length,
+      processed: target.length,
+      skippedNoSignal: skipped,
+    },
+    topLeads: target.slice(0, 10).map((lead) => {
+      const url = String(lead.url ?? "").trim();
+      const enrich = enrichmentByUrl.get(url) ?? {};
+      return {
+        name: lead.title || lead.name,
+        url,
+        score: lead.score,
+        why_match: enrich.outreach_angle || lead.why_match,
+      };
+    }),
+    cost,
+    csvPath: args.outCsv,
+    mode: "confirmed",
+    notes: "DMs are drafts for review. This script does not send them.",
+  });
 
   process.stdout.write(
     `${JSON.stringify(
@@ -463,6 +516,9 @@ async function main() {
         processed: target.length,
         skippedNoSignal: skipped,
         outCsv: args.outCsv,
+        summary,
+        estimated_usd: cost.estimated_usd,
+        calls: cost.calls,
       },
       null,
       2,

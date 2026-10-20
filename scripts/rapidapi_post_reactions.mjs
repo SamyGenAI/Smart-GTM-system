@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { estimateRapidApi } from "./lib/costs.mjs";
+import { gatePaid } from "./lib/guard.mjs";
+import { writeRunSummary } from "./lib/summary.mjs";
 
 // ---------------------------------------------------------------------------
 // Env loader
@@ -239,15 +242,35 @@ async function main() {
     process.exit(2);
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+  const outPath = args.out || path.join("inputs", "post-engagers", `${today}-post-engagers-raw.csv`);
+  const cost = estimateRapidApi({ requests: postUrls.length * args.maxPages });
+  const decision = gatePaid({
+    argv: process.argv,
+    estimate: cost,
+    extra: { posts: postUrls.length, maxPages: args.maxPages, note: cost.note },
+  });
+  if (decision !== "confirmed") {
+    const summary = writeRunSummary({
+      run: "post-engagers",
+      query: postUrls.join(" "),
+      counts: { posts: postUrls.length, maxPages: args.maxPages, rapidapi_calls_upper_bound: cost.calls.rapidapi },
+      topLeads: [],
+      cost,
+      csvPath: outPath,
+      mode: decision,
+      notes: "Upper bound assumes every post uses every page. The live run stops when a post runs out of reactions.",
+    });
+    process.stderr.write(`Summary: ${summary}\n`);
+    process.exit(decision === "estimate" ? 0 : 2);
+  }
+
   const key = process.env.RAPIDAPI_KEY;
   if (!key) {
     console.error(JSON.stringify({ error: "missing_credential", var: "RAPIDAPI_KEY" }));
     process.exit(3);
   }
 
-  // Default output path
-  const today = new Date().toISOString().slice(0, 10);
-  const outPath = args.out || path.join("inputs", "post-engagers", `${today}-post-engagers-raw.csv`);
   fs.mkdirSync(path.dirname(path.resolve(outPath)), { recursive: true });
 
   // Aggregate reactors across all posts: keyed by linkedin_url (or name fallback)
@@ -316,12 +339,23 @@ async function main() {
     );
   }
 
-  fs.writeFileSync(outPath, rows.join("\n"), "utf8");
+  fs.writeFileSync(outPath, `\uFEFF${rows.join("\n")}\n`, "utf8");
+
+  const summary = writeRunSummary({
+    run: "post-engagers",
+    query: postUrls.join(" "),
+    counts: { posts: postUrls.length, unique_engagers: byPerson.size },
+    topLeads: [...byPerson.values()].slice(0, 10).map((p) => ({ name: p.name, url: p.linkedin_url, why_match: p.headline })),
+    cost,
+    csvPath: outPath,
+    mode: "confirmed",
+  });
 
   console.log(`\nPost-engagers pull complete.`);
   console.log(`Posts processed : ${postUrls.length}`);
   console.log(`Unique engagers : ${byPerson.size}`);
   console.log(`Output          : ${outPath}`);
+  console.log(`Summary         : ${summary}`);
   console.log(`\nNext step: Read skills/score-leads/SKILL.md and score this list with Claude Haiku.`);
   console.log(`  node scripts/score_leads_haiku.mjs -i ${outPath} -o outputs/${today}-post-engagers-scored.csv -b 8`);
 }

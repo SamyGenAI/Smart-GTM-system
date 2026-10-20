@@ -27,7 +27,7 @@ Two context files, deliberately separate:
 
 Also needed:
 
-- `context/icp-definition/icp-definition.md` — read it if present, to judge whether a signal actually matters for this user's ICP.
+- `brain/raw/me/offer.md` heading `## ICP` — judge whether a signal matters. Do not copy it locally.
 - Python 3 available as `python` on PATH.
 - Per-signal API keys in `.env` — see the Requires column below.
 
@@ -111,7 +111,7 @@ Each script prints JSON to stdout: `{"source", "signal_type", "count", "signals"
 
 Read the JSON from every script and compose **one merged digest** — not one section per script. The JSON is for you, not the user; never paste it into chat.
 
-Group by **company**, not by signal type. The user cares which accounts are heating up, not which script found what. Apply `## How to rank` from `context/signals/signals.md` for ordering, and check findings against the ICP definition if it exists.
+Group by **company**, not by signal type. The user cares which accounts are heating up, not which script found what. Apply `## How to rank` from `context/signals/signals.md` for ordering, and check findings against `## ICP` in `brain/raw/me/offer.md`.
 
 ## Output (conversational — no file written)
 

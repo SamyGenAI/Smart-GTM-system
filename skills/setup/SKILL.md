@@ -1,102 +1,50 @@
 ---
 name: setup
-description: Run once after cloning the repo to make it fully operational. Guides the user through copying .env.example, adding API keys, and populating all context files (profile, ICP, positioning, brief, competitor radar) from their LinkedIn profile, website, and answers. Triggers on /setup or any message like "set up this repo", "onboard", "get started", or "configure this repo for [domain]".
+description: Run once after cloning. Checks the brain submodule, .env, and the offer.md headings. Does not copy ICP or offer text into this repo. Triggers on /setup or "set up this repo".
 ---
 
 # Skill: Setup
 
-**Run once:** right after clone  
-**Goal:** make the repo usable in 10-15 minutes
+**Run once** after clone. Goal: the repo can estimate a lead run.
 
-## Quick Start
+## Steps
 
-```
-/setup
-```
+1. If `.env` is missing, tell the user to copy `.env.example` to `.env` and fill:
+   - `ANTHROPIC_API_KEY` (score + enrich)
+   - `EXA_API_KEY` (find leads)
+   - `RAPIDAPI_KEY` (optional: profile pull and post engagers)
+   Wait until they say the file is saved. Never write a key into the repo.
 
-## What setup does
-
-0. Check that `.env` exists. If not, instruct the user:
-
-   > "Before we start, copy `.env.example` to `.env` and fill in your API keys:
-   > - `ANTHROPIC_API_KEY` — required (scoring + enrichment)
-   > - `EXA_API_KEY` — required (find-leads)
-   > - `RAPIDAPI_KEY` — optional (LinkedIn profile pull + post-engagers)
-   >
-   > Once your `.env` is ready, reply 'done' and we'll continue."
-
-   Wait for confirmation before proceeding.
-
-1. Capture your LinkedIn profile URL and business website
-2. If `RAPIDAPI_KEY` exists, fetch LinkedIn profile once with:
+2. If `brain/raw/me/offer.md` is missing, stop. Give them:
 
 ```bash
-node scripts/rapidapi_linkedin_profile.mjs "<your_linkedin_url>" --out outputs/linkedin-profile.json
-node scripts/parse_linkedin_profile.mjs outputs/linkedin-profile.json
+git submodule add -b main https://github.com/SamyGenAI/Samy-SmartOS.git brain
+git submodule update --init brain
 ```
-3. Use websearch to get as much details as possible from `<your_website_url>`
-4. For each context file, read the corresponding template to understand the required structure, then create the adapted file alongside it inside the same folder — never modify the template:
 
-| Template (read, never touch) | Adapted file (create/overwrite with real data) |
-|------------------------------|------------------------------------------------|
-| `context/profile/profile-template.md` | `context/profile/profile.md` |
-| `context/icp-definition/icp-definition-template.md` | `context/icp-definition/icp-definition.md` |
-| `context/positioning/positioning-template.md` | `context/positioning/positioning.md` |
-| `context/brief/brief-template.md` | `context/brief/brief.md` |
-| `context/competitor-radar/competitor-radar-template.md` | `context/competitor-radar/competitor-radar.md` |
+Do not vendor the vault and do not edit `raw/`.
 
-5. Update `CLAUDE.md` with the user's company name, GTM motion, and current priorities.
+3. Read `brain/raw/me/offer.md` and check the headings in `context/README.md`. Required: `## Offer`, `## ICP`, `## Anti-ICP`, `## Positioning`. If one is missing, name it and stop. Samy fills it in the vault.
 
-## Required question 1
+4. Read `brain/wiki/gtm-os.md` if it exists, and `context/signals/gtm.md`. Do not create `context/icp-definition/`, `context/positioning/`, `context/brief/`, or `context/profile/`. Those files used to duplicate the offer.
 
-Ask once:
+5. Optional: `## LinkedIn` in offer.md is the profile URL. A profile pull is one RapidAPI call. Estimate first:
 
-> "Paste your LinkedIn profile URL (or reply 'skip')."
-
-## Required question 2
-
-Ask once:
-
-> "What is your business website URL ? (or reply 'skip')."
-
-## Required question 3
-
-Ask once:
-
-> "2 more questions, what service or product are you selling ? (or reply 'skip')."
-
-## Required question 4
-
-Ask once:
-
-> "Who is your ideal client ? (or reply 'skip')."
-
-## Required question 5
-
-Ask once:
-
-> "Last one, who are your competitors ? (provide their website URLs or reply 'skip')."
-
-
-## Output checklist
-
-- [ ] All `*-template.md` files are untouched — no edits, no overwrites.
-- [ ] `context/profile/profile.md` exists and is populated (LinkedIn URL, company details).
-- [ ] If RapidAPI data is available, LinkedIn profile details are filled under `User's LinkedIn profile`.
-- [ ] `context/icp-definition/icp-definition.md` and `context/positioning/positioning.md` are filled from profile, answers, and website content.
-- [ ] `context/brief/brief.md` contains a concise offer + ICP summary (max ~150 words).
-- [ ] `context/competitor-radar/competitor-radar.md` is filled with competitor details from question 5.
-- [ ] `CLAUDE.md` is personalized to user and company info.
-
-## Rules
-
-- **Never edit a `*-template.md` file.** Templates are read-only reference files. Always write user data into the adapted `*.md` file (same name, no `-template` suffix).
-- Never infer a fact — all data stored must be accurate based on: user answers, LinkedIn profile, and website content.
-- If information is missing, leave the field blank or note `[unknown]`. Never guess or invent.
-- Be concise — only keep data that is useful for specialized outreach.
-
-## Next command
-
+```bash
+node scripts/rapidapi_linkedin_profile.mjs "<linkedin-url>" --estimate
 ```
-Give a prompt example to the user, "Using skills/find-leads/SKILL.md find 25 leads matching my ICP".
-```
+
+Only add `--confirm` after Samy accepts the estimate. Parsing the saved JSON with `scripts/parse_linkedin_profile.mjs` is local and free.
+
+6. Watchlist: `context/signals/watchlist.md` is already the GTM watchlist. Do not paste the ICP into it.
+
+## Done when
+
+- `.env` exists locally and is not committed.
+- `brain/raw/me/offer.md` has the four required headings.
+- No offer or ICP text was written under `context/`.
+- Samy has seen an example: estimate a find-leads run, then confirm.
+
+## Next
+
+`pipelines/find-leads.md`

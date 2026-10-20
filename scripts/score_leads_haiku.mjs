@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { loadOffer, scoringRubric } from "./lib/brain.mjs";
+import { estimateScore } from "./lib/costs.mjs";
+import { gatePaid } from "./lib/guard.mjs";
+import { writeRunSummary } from "./lib/summary.mjs";
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -177,24 +181,7 @@ function normalizeRow(row) {
   return r;
 }
 
-const ICP_SCORING_RUBRIC = `
-Target profile:
-- Founder/agency owner/Director/Co-founder/Head of Sales/Growth/GTM
-- Europe, US, NZ, AU
-- Team size ideally 1-30 (up to 50 acceptable)
-- Signals of LinkedIn activity and growth intent
-- Headline looks professional : no buzzwords, clear social proof and / or title.
-- Not an AI related business.
-
-
-Scoring guidance:
-- 80-100: strong ICP fit with clear B2B founder + likely region + relevant offer
-- 60-79: decent fit but missing evidence on one or more key signals
-- 40-59: weak fit, ambiguous relevance
-- 0-39: poor fit / likely anti-ICP
-`;
-
-async function scoreWithClaude(leads, model) {
+async function scoreWithClaude(leads, model, rubric) {
   const payload = {
     model,
     max_tokens: 8192,
@@ -211,7 +198,7 @@ async function scoreWithClaude(leads, model) {
               "Score must be integer 0-100. why_match must be a short sentence (max 140 chars) " +
               "explaining concretely why this lead matches (or does not match) the ICP. " +
               "Do NOT write outreach copy or DM angles here.\n\n" +
-              `ICP Rubric:\n${ICP_SCORING_RUBRIC}\n\nLeads JSON:\n${JSON.stringify(leads)}`,
+              `ICP Rubric:\n${rubric}\n\nLeads JSON:\n${JSON.stringify(leads)}`,
           },
         ],
       },
@@ -242,13 +229,7 @@ async function scoreWithClaude(leads, model) {
 async function main() {
   const args = parseArgs(process.argv);
   if (!args.input) {
-    throw new Error("Missing --input. Example: node scripts/score_leads_haiku.mjs -i outputs/leads.csv");
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("Missing ANTHROPIC_API_KEY in environment.");
-  }
-  if (!args.outCsv) {
-    throw new Error("Missing --out-csv. This script writes CSV output only.");
+    throw new Error("Missing --input. Example: node scripts/score_leads_haiku.mjs -i outputs/leads.csv --estimate");
   }
 
   const leads = readCsv(args.input).map(normalizeRow);
@@ -257,10 +238,39 @@ async function main() {
   }
 
   const batchSize = Number.isFinite(args.batchSize) && args.batchSize > 0 ? args.batchSize : 20;
+  const cost = estimateScore({ leadCount: leads.length, batchSize });
+  const decision = gatePaid({
+    argv: process.argv,
+    estimate: cost,
+    extra: { input: args.input, leadCount: leads.length, batchSize },
+  });
+  if (decision !== "confirmed") {
+    const summary = writeRunSummary({
+      run: "score-leads",
+      query: args.input,
+      counts: { leads: leads.length, batches: cost.calls.anthropic },
+      topLeads: leads.slice(0, 10).map((lead) => ({ name: lead.title || lead.name, url: lead.url })),
+      cost,
+      csvPath: args.outCsv || null,
+      mode: decision,
+      notes: "Scoring reads ## ICP, ## Anti-ICP, and optional ## Geography, ## Buyer, ## Positioning, ## Scoring from brain/raw/me/offer.md. No offer text is stored in this repo.",
+    });
+    process.stderr.write(`Summary: ${summary}\n`);
+    process.exit(decision === "estimate" ? 0 : 2);
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("Missing ANTHROPIC_API_KEY in environment.");
+  }
+  if (!args.outCsv) {
+    throw new Error("Missing --out-csv. This script writes CSV output only.");
+  }
+
+  const rubric = scoringRubric(loadOffer().sections);
   const scoredByUrl = new Map();
   for (let i = 0; i < leads.length; i += batchSize) {
     const batch = leads.slice(i, i + batchSize);
-    const batchCsv = await scoreWithClaude(batch, args.model);
+    const batchCsv = await scoreWithClaude(batch, args.model, rubric);
     const parsed = parseScoreCsv(batchCsv);
     for (const lead of batch) {
       const url = String(lead.url ?? "").trim();
@@ -283,7 +293,24 @@ async function main() {
   });
 
   fs.mkdirSync(path.dirname(args.outCsv), { recursive: true });
-  fs.writeFileSync(args.outCsv, `${outputHeaders.join(",")}\n${outputRows.join("\n")}\n`, "utf8");
+  fs.writeFileSync(args.outCsv, `\uFEFF${outputHeaders.join(",")}\n${outputRows.join("\n")}\n`, "utf8");
+
+  const ranked = leads
+    .map((lead) => {
+      const url = String(lead.url ?? "").trim();
+      const scored = scoredByUrl.get(url) ?? { score: 0, why_match: "" };
+      return { name: lead.title || lead.name, url, score: scored.score, why_match: scored.why_match };
+    })
+    .sort((a, b) => b.score - a.score);
+  const summary = writeRunSummary({
+    run: "score-leads",
+    query: args.input,
+    counts: { leads: leads.length, batches: cost.calls.anthropic },
+    topLeads: ranked,
+    cost,
+    csvPath: args.outCsv,
+    mode: "confirmed",
+  });
 
   process.stdout.write(
     `${JSON.stringify(
@@ -292,6 +319,9 @@ async function main() {
         model: args.model,
         count: leads.length,
         outCsv: args.outCsv || null,
+        summary,
+        estimated_usd: cost.estimated_usd,
+        calls: cost.calls,
       },
       null,
       2,

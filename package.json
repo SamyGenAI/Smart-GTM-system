@@ -1,6 +1,9 @@
 {
+  "name": "smart-creator-gtm-system",
+  "private": true,
   "scripts": {
-    "find-leads": "node scripts/find_leads_exa.mjs"
+    "find-leads": "node scripts/find_leads_exa.mjs",
+    "test": "node --test scripts/lib/brain.test.mjs"
   },
   "dependencies": {
     "exa-js": "^2.12.1"

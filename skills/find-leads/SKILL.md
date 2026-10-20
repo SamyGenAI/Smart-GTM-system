@@ -5,10 +5,15 @@ description: Search for people or companies matching a query using EXA. Use to b
 
 # Skill: Find Leads
 
+Read `## ICP` in `brain/raw/me/offer.md` before choosing the query. Do not copy that section into this repo. The script searches the query only.
+
+Paid call: print the estimate, wait for approval, then add `--confirm`.
+
 ## Quick Start
 
 ```bash
-node scripts/find_leads_exa.mjs -q "B2B AI founders in San Francisco" -n 25 -o outputs/find-leads.csv
+node scripts/find_leads_exa.mjs -q "founders who want time off the screen" -n 25 --estimate
+node scripts/find_leads_exa.mjs -q "founders who want time off the screen" -n 25 --confirm
 ```
 
 ## Purpose
@@ -25,19 +30,19 @@ Category is auto-detected from the query, or forced with `-c people|company`.
 People/company auto:
 
 ```bash
-node scripts/find_leads_exa.mjs -q "B2B AI founders in San Francisco" -n 25
+node scripts/find_leads_exa.mjs -q "founders who want time off the screen" -n 25 --estimate
 ```
 
 Force company:
 
 ```bash
-node scripts/find_leads_exa.mjs -q "B2B AI startups in San Francisco" -c company -n 25
+node scripts/find_leads_exa.mjs -q "creator businesses that sell a high-ticket offer" -c company -n 25 --confirm
 ```
 
 Write CSV:
 
 ```bash
-node scripts/find_leads_exa.mjs -q "B2B AI founders in San Francisco" -n 25 -o outputs/2026-04-25-find-leads.csv
+node scripts/find_leads_exa.mjs -q "founders who want time off the screen" -n 25 --confirm -o outputs/2026-04-25-find-leads.csv
 ```
 
 ## Output

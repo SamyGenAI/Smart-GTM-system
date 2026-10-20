@@ -17,7 +17,7 @@ Any of the following CSV sources (the script auto-normalizes LinkedIn export col
 - LinkedIn Connections export → drop in `inputs/connections/`
 - Post-engagers export → drop in `inputs/post-engagers/`
 
-Context files: `context/icp-definition/icp-definition.md`, `context/positioning/positioning.md`
+ICP source: `brain/raw/me/offer.md` headings `## ICP`, `## Anti-ICP`, `## Positioning`. Optional `## Geography`, `## Buyer`, `## Scoring`. See `context/README.md`. Do not keep a local copy.
 
 ## Output Contract (strict)
 
@@ -40,23 +40,26 @@ No JSON output. CSV only.
 ## Quick Start
 
 ```bash
-# Pipeline output
+# Estimate first. Add --confirm only after approval.
 node scripts/score_leads_haiku.mjs \
   -i outputs/2026-04-26-leads.csv \
   -o outputs/2026-04-26-leads-scored.csv \
-  -b 8
+  -b 8 \
+  --estimate
 
-# LinkedIn connections export
+# LinkedIn connections export (same --estimate, then --confirm)
 node scripts/score_leads_haiku.mjs \
   -i inputs/connections/my-connections.csv \
   -o outputs/connections-scored.csv \
-  -b 8
+  -b 8 \
+  --estimate
 
 # Post-engagers export
 node scripts/score_leads_haiku.mjs \
   -i inputs/post-engagers/engagers.csv \
   -o outputs/engagers-scored.csv \
-  -b 8
+  -b 8 \
+  --estimate
 ```
 
 ## Next Step

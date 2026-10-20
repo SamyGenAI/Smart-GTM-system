@@ -34,7 +34,12 @@ Who to watch: `context/signals/watchlist.md`, under `## LinkedIn` / `## X` /
 `## Reddit` / `## YouTube` / `## Web` / `## Gmail`.
 What counts as a signal: `context/signals/signals.md` if it exists — use it to
 judge relevance and ordering. If missing, use judgement and say once that
-filling it in sharpens future runs.
+filling it in sharpens future runs. Whether a signal fits the business is
+`## ICP` in `brain/raw/me/offer.md`. Do not paste that heading into the watchlist.
+
+Paid sources (LinkedIn, X, a keyed web backend, YouTube when Gemini is on)
+need `--dry-run` or `--estimate` first, then `--confirm`. Reddit, keyless web,
+and YouTube without Gemini are free. Nothing posts or replies.
 
 ## Step 1 — Ask first
 

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { writeRunSummary } from "./lib/summary.mjs";
 
 // ---------------------------------------------------------------------------
 // Arg parser
@@ -145,11 +146,30 @@ async function main() {
     lines.push(csvRow(OUTPUT_COLS.map((col) => r[col])));
   }
 
-  fs.writeFileSync(outPath, lines.join("\n"), "utf8");
+  fs.writeFileSync(outPath, `\uFEFF${lines.join("\n")}\n`, "utf8");
+
+  const ranked = [...filtered].sort((a, b) => (Number.parseInt(b.score, 10) || 0) - (Number.parseInt(a.score, 10) || 0));
+  const summary = writeRunSummary({
+    run: `export-${args.campaign}`,
+    query: args.campaign,
+    counts: { rows: filtered.length, minScore: args.minScore },
+    topLeads: ranked.slice(0, 10).map((row) => ({
+      name: row.name,
+      url: row.linkedin_url,
+      score: row.score,
+      why_match: row.why_match,
+    })),
+    cost: { calls: { anthropic: 0, exa: 0, rapidapi: 0 }, estimated_usd: 0, note: "Export makes no API calls." },
+    csvPath: outPath,
+    mode: "local",
+    notes: "Import the CSV into the Google Sheets folder. UTF-8 with BOM. Nothing is sent from this step.",
+  });
 
   console.log(`Export complete.`);
-  console.log(`CSV  : ${outPath}`);
-  console.log(`Rows : ${filtered.length}`);
+  console.log(`CSV     : ${outPath}`);
+  console.log(`Rows    : ${filtered.length}`);
+  console.log(`Summary : ${summary}`);
+  console.log(`Paid calls: 0`);
 }
 
 main().catch((err) => { console.error("Fatal:", err.message); process.exit(1); });

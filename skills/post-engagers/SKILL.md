@@ -20,7 +20,7 @@ Pull people who reacted to a LinkedIn post and turn them into warm leads.
 
 ## Dependencies
 
-- `context/profile/profile.md` contains `user_linkedin_url`
+- Samy's profile URL, when needed, is the `## LinkedIn` heading in `brain/raw/me/offer.md`
 - `RAPIDAPI_KEY` in `.env`
 - Scripts:
   - `scripts/rapidapi_post_reactions.mjs` — fetch post reactions → CSV in `inputs/post-engagers/`
@@ -41,7 +41,8 @@ lead_id,name,headline,linkedin_url,engagement_count,repeat_engager,latest_engage
 # Pull reactions from specific posts (comma-separated URLs)
 node scripts/rapidapi_post_reactions.mjs \
   --urls "https://www.linkedin.com/posts/HANDLE_activity-XXXX,https://www.linkedin.com/posts/HANDLE_activity-YYYY" \
-  --max-pages 5
+  --max-pages 5 \
+  --estimate
 
 # Pull from a text file with one URL per line
 node scripts/rapidapi_post_reactions.mjs \

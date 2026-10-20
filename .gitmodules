@@ -1,0 +1,4 @@
+[submodule "brain"]
+	path = brain
+	url = https://github.com/SamyGenAI/Samy-SmartOS.git
+	branch = main

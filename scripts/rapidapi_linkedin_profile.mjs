@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { estimateRapidApi } from "./lib/costs.mjs";
+import { gatePaid } from "./lib/guard.mjs";
+import { writeRunSummary } from "./lib/summary.mjs";
 
 // ---------------------------------------------------------------------------
 // Env loader
@@ -67,16 +70,36 @@ async function main() {
     process.exit(2);
   }
 
-  const key = process.env.RAPIDAPI_KEY;
-  if (!key) {
-    console.error(JSON.stringify({ error: "missing_credential", var: "RAPIDAPI_KEY" }));
-    process.exit(3);
-  }
-
   const username = parseUsername(args.input);
   if (!username) {
     console.error(JSON.stringify({ error: "could_not_parse_username", input: args.input }));
     process.exit(2);
+  }
+
+  const cost = estimateRapidApi({ requests: 1 });
+  const decision = gatePaid({
+    argv: process.argv,
+    estimate: cost,
+    extra: { username, calls_detail: "1 RapidAPI profile request" },
+  });
+  if (decision !== "confirmed") {
+    const summary = writeRunSummary({
+      run: "linkedin-profile",
+      query: username,
+      counts: { requests: 1 },
+      topLeads: [],
+      cost,
+      csvPath: args.out || null,
+      mode: decision,
+    });
+    process.stderr.write(`Summary: ${summary}\n`);
+    process.exit(decision === "estimate" ? 0 : 2);
+  }
+
+  const key = process.env.RAPIDAPI_KEY;
+  if (!key) {
+    console.error(JSON.stringify({ error: "missing_credential", var: "RAPIDAPI_KEY" }));
+    process.exit(3);
   }
 
   const url = `https://linkedin-api8.p.rapidapi.com/profile-data-connection-count-posts?username=${encodeURIComponent(username)}`;

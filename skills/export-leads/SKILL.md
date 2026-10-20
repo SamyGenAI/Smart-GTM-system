@@ -1,13 +1,13 @@
 ---
 name: export-leads
-description: Export an enriched lead CSV into a clean, normalized outreach list with standardized columns and auto-derived tiers. Final step before loading into a CRM, Notion, or outreach tool. Triggers on /export-leads or any message like "export leads", "export the CSV", "finalize the outreach list", or "prepare the CRM export".
+description: Export an enriched lead CSV into a clean, normalized outreach list with standardized columns and auto-derived tiers. Final step before importing into the Google Sheet. Does not send or enroll. Triggers on /export-leads or any message like "export leads", "export the CSV", "finalize the outreach list", or "prepare the sheet".
 ---
 
 # Skill: Export Leads
 
 ## Purpose
 
-Take any enriched CSV and produce one clean, normalized outreach list.
+Take any enriched CSV and produce one Sheets-ready outreach list (UTF-8 with BOM). Import it into the Drive folder in `context/signals/gtm.md`. This step makes no API call.
 
 ## Quick Start
 
@@ -37,6 +37,9 @@ node scripts/export_leads.mjs \
 
 ```
 Export complete.
-CSV  : outputs/[date]-[campaign]-leads.csv
-Rows : {N}
+CSV     : outputs/[date]-[campaign]-leads.csv
+Rows    : {N}
+Summary : brain/outputs/gtm/[date]-export-[campaign]/summary.md
 ```
+
+Then hand the sheet to Samy. See `pipelines/handoffs.md`. No sequence enrollment.

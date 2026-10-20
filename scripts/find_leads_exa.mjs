@@ -1,6 +1,10 @@
 import Exa from "exa-js";
 import fs from "node:fs";
 import path from "node:path";
+import { estimateFindLeads } from "./lib/costs.mjs";
+import { gatePaid } from "./lib/guard.mjs";
+import { loadOffer } from "./lib/brain.mjs";
+import { writeRunSummary } from "./lib/summary.mjs";
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -23,6 +27,7 @@ function parseArgs(argv) {
     category: "auto",
     numResults: 25,
     out: "",
+    run: "find-leads",
   };
 
   for (let i = 2; i < argv.length; i += 1) {
@@ -38,6 +43,9 @@ function parseArgs(argv) {
       i += 1;
     } else if ((token === "--out" || token === "-o") && argv[i + 1]) {
       args.out = argv[i + 1];
+      i += 1;
+    } else if (token === "--run" && argv[i + 1]) {
+      args.run = argv[i + 1];
       i += 1;
     }
   }
@@ -125,7 +133,7 @@ function writeCsv(rows, outputPath) {
       .map(csvEscape)
       .join(","),
   );
-  const content = `${header}\n${lines.join("\n")}\n`;
+  const content = `\uFEFF${header}\n${lines.join("\n")}\n`;
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, content, "utf8");
 }
@@ -136,13 +144,43 @@ async function main() {
     throw new Error('Missing query. Example: node scripts/find_leads_exa.mjs -q "B2B AI founders in San Francisco"');
   }
 
-  if (!process.env.EXA_API_KEY) {
-    throw new Error("Missing EXA_API_KEY in environment.");
-  }
-
   const category = args.category === "auto" ? detectCategory(args.query) : args.category;
   if (!["people", "company"].includes(category)) {
     throw new Error('Category must be "auto", "people", or "company".');
+  }
+
+  const cost = estimateFindLeads();
+  let icp = "";
+  try {
+    icp = loadOffer().sections.get("ICP") || "";
+  } catch (err) {
+    icp = "";
+    process.stderr.write(`${err.message}\n`);
+  }
+  const decision = gatePaid({
+    argv: process.argv,
+    estimate: cost,
+    extra: { query: args.query, category, numResultsRequested: args.numResults, icp_loaded: Boolean(icp) },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  const outPath = args.out || path.join("outputs", `${today}-find-leads.csv`);
+  if (decision !== "confirmed") {
+    const summary = writeRunSummary({
+      run: args.run,
+      query: args.query,
+      counts: { requested: args.numResults, returned: 0 },
+      topLeads: [],
+      cost,
+      csvPath: null,
+      mode: decision,
+      notes: icp ? `ICP was read from the brain and was not sent to Exa. The query above is what would be searched.` : "offer.md could not be read. The search query still has to come from Samy.",
+    });
+    process.stderr.write(`Summary: ${summary}\n`);
+    process.exit(decision === "estimate" ? 0 : 2);
+  }
+
+  if (!process.env.EXA_API_KEY) {
+    throw new Error("Missing EXA_API_KEY in environment.");
   }
 
   const exa = new Exa(process.env.EXA_API_KEY);
@@ -155,16 +193,26 @@ async function main() {
   });
 
   const rows = toRows(result, category, args.query);
-  if (args.out) {
-    writeCsv(rows, args.out);
-  }
+  writeCsv(rows, outPath);
+  const summary = writeRunSummary({
+    run: args.run,
+    query: args.query,
+    counts: { requested: args.numResults, returned: rows.length },
+    topLeads: rows.slice(0, 10).map((row) => ({ name: row.title, url: row.url })),
+    cost,
+    csvPath: outPath,
+    mode: "confirmed",
+  });
 
   const output = {
     query: args.query,
     category,
     numResultsRequested: args.numResults,
     count: rows.length,
-    out: args.out || null,
+    out: outPath,
+    summary,
+    estimated_usd: cost.estimated_usd,
+    calls: cost.calls,
     rows,
   };
 

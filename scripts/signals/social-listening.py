@@ -39,6 +39,37 @@ MAX_HANDLES = 20  # x_search rejects more than this
 WATCHLIST = os.path.join("context", "signals", "watchlist.md")
 TIMEOUT = 600  # server-side search runs ~2min; actor runs can be slower
 
+# Approximate USD. Keep these aligned with scripts/lib/costs.mjs.
+APIFY_POST_USD = 0.005
+XAI_CALL_USD = 0.05
+GEMINI_VIDEO_USD = 0.01
+WEB_QUERY_USD = 0.005
+EXA_SEARCH_USD = 0.007
+
+
+# Print the estimate. Return False when the caller should stop.
+# Paid work continues only when --confirm is set and this is not a dry run.
+def require_paid(args, payload):
+    body = dict(payload)
+    calls = dict(body.get("calls") or {})
+    body["calls"] = calls
+    body["calls_anthropic"] = calls.get("anthropic", 0)
+    body["calls_exa"] = calls.get("exa", 0)
+    body["calls_rapidapi"] = calls.get("rapidapi", 0)
+    body["paid_calls"] = False
+    body["confirmed"] = False
+    if args.dry_run:
+        body["dry_run"] = True
+        print(json.dumps(body, indent=2, ensure_ascii=False))
+        return False
+    if not args.confirm:
+        body["dry_run"] = False
+        print(json.dumps(body, indent=2, ensure_ascii=False))
+        sys.stderr.write(
+            "Refusing paid calls without --confirm. Re-run with --dry-run, then --confirm after review.\n")
+        raise SystemExit(2)
+    return True
+
 X_POST_URL = re.compile(
     r"^https?://(?:www\.)?(?:x|twitter)\.com/[A-Za-z0-9_]{1,15}/(?:status|article)/\d+", re.I)
 
@@ -184,12 +215,16 @@ def run_linkedin(args, entries):
         return emit("linkedin", []) or sys.stderr.write(
             f"Nothing usable under '## LinkedIn' in {WATCHLIST}.\n")
 
-    if args.dry_run:
-        return print(json.dumps(
-            {"source": "linkedin", "dry_run": True,
-             "max_posts_scraped": len(entries) * args.per_source,
-             "watching": [{"name": e["name"], "url": e["url"]} for e in entries]},
-            indent=2, ensure_ascii=False))
+    posts = len(entries) * args.per_source
+    if not require_paid(args, {
+        "source": "linkedin",
+        "max_posts_scraped": posts,
+        "estimated_usd": round(posts * APIFY_POST_USD, 4),
+        "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0, "apify": posts},
+        "watching": [{"name": e["name"], "url": e["url"]} for e in entries],
+        "note": "Apify bills per post scraped. The dollar figure is an approximation.",
+    }):
+        return
 
     if not os.environ.get("APIFY_API_KEY"):
         raise SystemExit("Missing APIFY_API_KEY. Add it to .env in the repo root.")
@@ -301,10 +336,13 @@ def run_x(args, entries):
         sys.stderr.write(f"x_search accepts {MAX_HANDLES} handles; using the first {MAX_HANDLES}.\n")
         resolved = resolved[:MAX_HANDLES]
 
-    if args.dry_run:
-        return print(json.dumps({"source": "x", "dry_run": True, "api_calls": 1,
-                                 "query": args.query, "watching": resolved},
-                                indent=2, ensure_ascii=False))
+    if not require_paid(args, {
+        "source": "x", "api_calls": 1, "estimated_usd": XAI_CALL_USD,
+        "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0, "xai": 1},
+        "query": args.query, "watching": resolved,
+        "note": "One xAI x_search call per run.",
+    }):
+        return
 
     if not os.environ.get("X_API_KEY"):
         raise SystemExit("Missing X_API_KEY. Add it to .env in the repo root.")
@@ -728,6 +766,8 @@ def run_reddit(args, entries):
     feeds = reddit_feeds(args.query, subs, args.days)
     if args.dry_run:
         return print(json.dumps({"source": "reddit", "dry_run": True, "cost": "free",
+                                 "estimated_usd": 0,
+                                 "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0},
                                  "feeds": len(feeds),
                                  "listing_requests": len(subs) * len(LISTING_SORTS),
                                  "query": args.query,
@@ -1198,15 +1238,32 @@ def run_youtube(args, entries):
     # posting weekly needs headroom before -d 7 leaves anything standing.
     per_target = max(args.limit, 10) if args.query else max(args.per_source, 5)
 
-    if args.dry_run:
+    gemini = bool(os.getenv("GEMINI_API_KEY")) and not args.no_gemini
+    if gemini:
+        if not require_paid(args, {
+            "source": "youtube",
+            "cost": "gemini reads caption-less videos",
+            "query": args.query,
+            "discovery_calls": len(channels) + (1 if args.query else 0),
+            "max_videos_examined": per_target * (len(channels) + (1 if args.query else 0)),
+            "transcripts_and_comments": args.enrich,
+            "gemini_fallback": True,
+            "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0, "gemini": args.enrich},
+            "estimated_usd": round(args.enrich * GEMINI_VIDEO_USD, 4),
+            "watching": [c["name"] for c in channels],
+            "note": "Upper bound. Only videos without captions are sent to Gemini. yt-dlp itself is free.",
+        }):
+            return
+    elif args.dry_run:
         return print(json.dumps(
             {"source": "youtube", "dry_run": True, "cost": "free",
+             "estimated_usd": 0,
+             "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0},
              "query": args.query,
              "discovery_calls": len(channels) + (1 if args.query else 0),
              "max_videos_examined": per_target * (len(channels) + (1 if args.query else 0)),
              "transcripts_and_comments": args.enrich,
-             "gemini_fallback": bool(os.getenv("GEMINI_API_KEY"))
-                                and not args.no_gemini,
+             "gemini_fallback": False,
              "watching": [c["name"] for c in channels]},
             indent=2, ensure_ascii=False))
 
@@ -1630,10 +1687,24 @@ def run_web(args, entries):
         return emit("web", []) or sys.stderr.write(
             f"Nothing under '## Web' in {WATCHLIST}, and no -q given.\n")
 
-    if args.dry_run:
+    query_count = len(targets)
+    if backend != "keyless":
+        exa_calls = query_count if backend == "exa" else 0
+        each = EXA_SEARCH_USD if backend == "exa" else WEB_QUERY_USD
+        if not require_paid(args, {
+            "source": "web",
+            "backend": backend,
+            "calls": {"anthropic": 0, "exa": exa_calls, "rapidapi": 0, backend: query_count},
+            "estimated_usd": round(query_count * each, 4),
+            "queries": [t["query"] for t in targets],
+            "note": "One paid search call per query.",
+        }):
+            return
+    elif args.dry_run:
         return print(json.dumps(
             {"source": "web", "dry_run": True, "backend": backend,
-             "cost": "free" if backend == "keyless" else "one API call per query",
+             "cost": "free", "estimated_usd": 0,
+             "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0},
              "queries": [t["query"] for t in targets]}, indent=2, ensure_ascii=False))
 
     sys.stderr.write(f"backend: {backend} ({len(targets)} query/queries)\n")
@@ -1717,8 +1788,15 @@ def main():
     parser.add_argument("--no-gemini", action="store_true",
                         help="YouTube: skip the Gemini fallback that reads "
                              "caption-less videos (on whenever GEMINI_API_KEY is set)")
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print call counts and approximate cost, then stop")
+    parser.add_argument("--estimate", action="store_true",
+                        help="Same as --dry-run")
+    parser.add_argument("--confirm", action="store_true",
+                        help="Required before LinkedIn, X, a keyed web backend, or YouTube with Gemini")
     args = parser.parse_args()
+    if args.estimate:
+        args.dry_run = True
 
     load_env()
     if args.source == "linkedin":

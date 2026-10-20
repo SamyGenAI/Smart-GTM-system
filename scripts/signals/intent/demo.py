@@ -189,7 +189,10 @@ def main():
     parser.add_argument("-d", "--days", type=int, default=7, help="lookback window in days")
     parser.add_argument("-n", "--limit", type=int, default=25, help="max signals to return")
     parser.add_argument("--dry-run", action="store_true", help="show watchlist and exit")
+    parser.add_argument("--estimate", action="store_true", help="same as --dry-run; this source is free")
     args = parser.parse_args()
+    if args.estimate:
+        args.dry_run = True
 
     load_env()
     require_env(REQUIRED_ENV)
@@ -208,6 +211,9 @@ def main():
             "source": SOURCE,
             "signal_type": SIGNAL_TYPE,
             "dry_run": True,
+            "calls": {"anthropic": 0, "exa": 0, "rapidapi": 0},
+            "estimated_usd": 0,
+            "note": "Demo data only. No paid call. Judge fit against ## ICP in brain/raw/me/offer.md.",
             "watching": entries,
         }, indent=2, ensure_ascii=False))
         return
