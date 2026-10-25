@@ -34,7 +34,7 @@ Read `pipelines/` and run one flow. Do not invent a send step.
 | Score | `pipelines/score-leads.md` |
 | Enrich (draft DMs only) | `pipelines/enrich-leads.md` |
 | Post engagers | `pipelines/post-engagers.md` |
-| Social listening / intent | `pipelines/social-listening.md` |
+| Intent signals | `skills/intent-signals/SKILL.md` |
 | Export to Sheets | `pipelines/export-to-sheets.md` |
 | Who reviews the list | `pipelines/handoffs.md` |
 

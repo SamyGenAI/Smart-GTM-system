@@ -28,42 +28,6 @@ Read by `--source youtube`. Free, but needs `pip install yt-dlp`.
 
 Acme Corp: https://youtube.com/@acme
 
-## Gmail
-
-> Read by `skills/social-listening` via the Gmail connector — no script, no key.
-> Free, and read-only by default: it searches and reads, never labels or
-> deletes. The one exception is sending you your own digest, to your own
-> address, when you asked for it — never mail to anyone else.
-> Needs the Gmail connector authorized in your claude.ai settings.
->
-> One newsletter per line — just the name, as you'd say it out loud. No email
-> address needed: Claude looks up who it actually comes from, and catches the
-> several addresses a writer with multiple publications sends from.
->
-> Only newsletters named here, plus the promotions/updates categories, are ever
-> read. The primary inbox is out of scope, so personal and client mail is never
-> touched. Ranked by date, newest first — a newsletter has no engagement count.
->
-> Not connected? Claude offers to walk you through it; decline and the source
-> is skipped.
-
-Lenny Rachitsky — Lenny's Newsletter
-The Neuron
-
-## Web
-
-> Read by `scripts/signals/social-listening.py --source web`.
-> Free on the keyless floor (DuckDuckGo/Startpage); uses Brave, Exa, Serper or
-> Parallel instead when the matching key is in `.env`. Ranked by date, newest
-> first — the open web has no engagement count.
->
-> One domain per line as `Name: domain.com`. Each becomes a `site:` query, so
-> the run surfaces what that competitor published. `-q` searches the open web
-> instead, and narrows to these domains when both are given.
-
-
-Acme Corp: https://acme.com
-
 ## Companies
 
 Acme Corp: acme.com

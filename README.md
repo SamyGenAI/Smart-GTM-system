@@ -75,7 +75,7 @@ Import `outputs/<date>-<campaign>-leads.csv` into the [lead-table Drive folder](
 | Score | `pipelines/score-leads.md` | Anthropic, after `--confirm` |
 | Enrich | `pipelines/enrich-leads.md` | Anthropic, after `--confirm` |
 | Post engagers | `pipelines/post-engagers.md` | RapidAPI, after `--confirm` |
-| Listening / intent | `pipelines/social-listening.md` | Only LinkedIn, X, keyed web, Gemini |
+| Intent signals | `skills/intent-signals/SKILL.md` | No (demo source only) |
 | Export to Sheets | `pipelines/export-to-sheets.md` | No |
 | Review handoff | `pipelines/handoffs.md` | No sending |
 

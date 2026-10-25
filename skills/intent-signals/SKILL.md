@@ -16,7 +16,7 @@ Read skills/intent-signals/SKILL.md and check buying signals for my watchlist th
 
 ## Purpose
 
-Detect what watched companies and people are **doing** that implies buying readiness. This is the intent half of the signal system — for what they are *saying and publishing*, use `skills/social-listening`.
+Detect what watched companies and people are **doing** that implies buying readiness.
 
 ## Dependencies
 
