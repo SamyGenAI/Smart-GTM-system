@@ -6,6 +6,8 @@ One repo per OS. This repo is GTM. Content OS is `Smart-creator-design-system`. 
 
 Grok Bot orchestrates. Claude Code, Codex, or Cursor do the work in this repo.
 
+When writing or editing notes destined for the Obsidian vault, use `skills/obsidian-markdown/SKILL.md`.
+
 ## Read the brain first
 
 1. `brain/CLAUDE.md` — vault schema.
